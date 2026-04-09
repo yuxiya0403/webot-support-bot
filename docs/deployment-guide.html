@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Deploying Webot Support Bot on Railway</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #f7f8fa; color: #1a1a2e; line-height: 1.7; }
+    a { color: #4f46e5; }
+    code { background: #eef0f4; padding: 2px 6px; border-radius: 4px; font-family: "Fira Mono", monospace; font-size: 0.88em; }
+    pre { background: #1e1e2e; color: #cdd6f4; padding: 20px; border-radius: 10px; overflow-x: auto; font-family: "Fira Mono", monospace; font-size: 0.88em; line-height: 1.6; margin: 16px 0; }
+    .container { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+    .hero { background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%); color: #fff; border-radius: 16px; padding: 48px 40px; margin-bottom: 48px; }
+    .hero h1 { font-size: 2rem; font-weight: 700; margin-bottom: 12px; }
+    .hero p { font-size: 1.05rem; opacity: 0.9; max-width: 560px; }
+    .hero .badges { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; }
+    .badge { background: rgba(255,255,255,0.18); border-radius: 20px; padding: 4px 14px; font-size: 0.82rem; font-weight: 600; }
+    .steps-nav { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 40px; }
+    .steps-nav a { background: #fff; border: 1.5px solid #e0e0ef; border-radius: 8px; padding: 8px 16px; font-size: 0.85rem; font-weight: 600; text-decoration: none; color: #4f46e5; }
+    .steps-nav a:hover { background: #4f46e5; color: #fff; }
+    .section { background: #fff; border-radius: 14px; padding: 36px 40px; margin-bottom: 28px; box-shadow: 0 1px 4px rgba(0,0,0,0.07); }
+    .section-header { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+    .step-num { background: #4f46e5; color: #fff; font-weight: 700; font-size: 0.9rem; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .section h2 { font-size: 1.25rem; font-weight: 700; }
+    .section p { margin-bottom: 14px; color: #3a3a5c; }
+    .section ol, .section ul { padding-left: 20px; margin-bottom: 14px; color: #3a3a5c; }
+    .section li { margin-bottom: 8px; }
+    .callout { border-radius: 10px; padding: 14px 18px; margin: 16px 0; font-size: 0.93rem; color: #3a3a5c; }
+    .callout.warning { background: #fffbeb; border-left: 4px solid #f59e0b; }
+    .callout.info    { background: #eff6ff; border-left: 4px solid #3b82f6; }
+    .callout.success { background: #f0fdf4; border-left: 4px solid #22c55e; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.9rem; }
+    th { background: #f0f0f8; text-align: left; padding: 10px 14px; font-weight: 600; color: #3a3a5c; }
+    td { padding: 10px 14px; border-top: 1px solid #eee; vertical-align: top; color: #3a3a5c; }
+  </style>
+</head>
+<body>
+<div class="container">
+
+  <div class="hero">
+    <h1>Deploy Webot Support Bot on Railway</h1>
+    <p>A step-by-step guide to getting your Telegram AI support bot running in the cloud — no server management required.</p>
+    <div class="badges">
+      <span class="badge">Node.js</span>
+      <span class="badge">Railway</span>
+      <span class="badge">GitHub</span>
+      <span class="badge">AWS Bedrock</span>
+    </div>
+  </div>
+
+  <div class="steps-nav">
+    <a href="#prereqs">0. Prerequisites</a>
+    <a href="#aws">1. AWS Credentials</a>
+    <a href="#github">2. Push to GitHub</a>
+    <a href="#railway">3. Deploy on Railway</a>
+    <a href="#envvars">4. Set Env Vars</a>
+    <a href="#verify">5. Verify</a>
+    <a href="#troubleshoot">Troubleshooting</a>
+  </div>
+
+  <div class="section" id="prereqs">
+    <div class="section-header"><div class="step-num">0</div><h2>Prerequisites</h2></div>
+    <p>Before you start, make sure you have the following accounts and tools ready:</p>
+    <table>
+      <tr><th>Requirement</th><th>Where to get it</th></tr>
+      <tr><td><strong>GitHub account</strong></td><td><a href="https://github.com" target="_blank">github.com</a> — free</td></tr>
+      <tr><td><strong>Railway account</strong></td><td><a href="https://railway.app" target="_blank">railway.app</a> — free tier includes $5/month credit</td></tr>
+      <tr><td><strong>Git installed</strong></td><td>Run <code>git --version</code> to check. Install from <a href="https://git-scm.com" target="_blank">git-scm.com</a> if missing.</td></tr>
+      <tr><td><strong>AWS IAM credentials</strong></td><td>Permanent access key from AWS Console (covered in Step 1)</td></tr>
+      <tr><td><strong>Telegram bot tokens</strong></td><td>Both user bot and agent bot tokens from <a href="https://t.me/BotFather" target="_blank">@BotFather</a></td></tr>
+    </table>
+    <div class="callout warning">
+      ⚠️ <strong>Do not use temporary AWS STS tokens for deployment.</strong> STS session tokens expire every few hours and will cause the bot to stop responding. You must use permanent IAM credentials — covered in Step 1.
+    </div>
+  </div>
+
+  <div class="section" id="aws">
+    <div class="section-header"><div class="step-num">1</div><h2>Get Permanent AWS Credentials</h2></div>
+    <p>The bot uses AWS Bedrock to run Claude AI. You need a permanent IAM access key — not a temporary session token.</p>
+    <ol>
+      <li>Go to <a href="https://console.aws.amazon.com/iam" target="_blank">AWS Console → IAM</a></li>
+      <li>Click <strong>Users</strong> in the left sidebar → select your user</li>
+      <li>Click the <strong>Security credentials</strong> tab</li>
+      <li>Scroll to <strong>Access keys</strong> → click <strong>Create access key</strong></li>
+      <li>Select <strong>Application running outside AWS</strong> → Next → Create</li>
+      <li>Copy the <strong>Access key ID</strong> and <strong>Secret access key</strong> — you won't see the secret again</li>
+    </ol>
+    <div class="callout info">
+      ℹ️ Make sure this IAM user has the <strong>AmazonBedrockFullAccess</strong> policy attached, and that Claude models are enabled in your AWS region (<code>ap-southeast-1</code>). Check this under AWS Console → Bedrock → Model access.
+    </div>
+    <div class="callout success">
+      ✅ You will paste these into Railway in Step 4. <strong>Never commit them to Git.</strong>
+    </div>
+  </div>
+
+  <div class="section" id="github">
+    <div class="section-header"><div class="step-num">2</div><h2>Push the Project to GitHub</h2></div>
+    <p>Railway deploys directly from a GitHub repository. Create a <strong>private</strong> repo so your code stays secure.</p>
+    <ol>
+      <li>Go to <a href="https://github.com/new" target="_blank">github.com/new</a></li>
+      <li>Name it (e.g. <code>webot-support-bot</code>), set visibility to <strong>Private</strong>, click <strong>Create repository</strong></li>
+      <li>In your terminal, run the commands below from inside the project folder</li>
+    </ol>
+<pre># Navigate to the project folder
+cd /path/to/tg-intercom-bridge
+
+# Stage all files (.env and runtime data are excluded by .gitignore)
+git add -A
+
+# Commit
+git commit -m "Initial deployment commit"
+
+# Add your GitHub repo as the remote (replace YOUR_USERNAME)
+git remote add origin https://github.com/YOUR_USERNAME/webot-support-bot.git
+
+# Push
+git branch -M main
+git push -u origin main</pre>
+    <div class="callout info">
+      ℹ️ The <code>.gitignore</code> already excludes <code>.env</code>, <code>node_modules/</code>, and all runtime data files (conversation logs, mappings, etc). Only source code and the knowledge base are committed.
+    </div>
+  </div>
+
+  <div class="section" id="railway">
+    <div class="section-header"><div class="step-num">3</div><h2>Deploy on Railway</h2></div>
+    <p>Railway auto-detects Node.js, installs dependencies, and runs <code>npm start</code>.</p>
+    <ol>
+      <li>Go to <a href="https://railway.app" target="_blank">railway.app</a> and sign in with GitHub</li>
+      <li>Click <strong>New Project</strong> → <strong>Deploy from GitHub repo</strong></li>
+      <li>Select your <code>webot-support-bot</code> repository and click <strong>Deploy Now</strong></li>
+      <li>Railway will start a build — you can watch the logs in real time</li>
+      <li>The first deploy will <strong>fail</strong> — that is expected because environment variables are not set yet. You will fix that in the next step.</li>
+    </ol>
+    <div class="callout info">
+      ℹ️ Railway uses the <code>railway.toml</code> file already in your project. It sets the start command to <code>npm start</code> and configures the bot to auto-restart on failure.
+    </div>
+  </div>
+
+  <div class="section" id="envvars">
+    <div class="section-header"><div class="step-num">4</div><h2>Set Environment Variables</h2></div>
+    <p>In your Railway project, click the service → <strong>Variables</strong> tab → add each variable below. Railway will redeploy automatically after you save.</p>
+    <table>
+      <tr><th>Variable</th><th>Value</th><th>Notes</th></tr>
+      <tr><td><code>MODE</code></td><td><code>ai</code></td><td></td></tr>
+      <tr><td><code>TELEGRAM_MODE</code></td><td><code>polling</code></td><td></td></tr>
+      <tr><td><code>PORT</code></td><td><code>3000</code></td><td></td></tr>
+      <tr><td><code>TELEGRAM_BOT_TOKEN</code></td><td>your user bot token</td><td>From @BotFather</td></tr>
+      <tr><td><code>AGENT_BOT_TOKEN</code></td><td>your agent bot token</td><td>From @BotFather</td></tr>
+      <tr><td><code>AGENT_CHAT_IDS</code></td><td><code>chatId1,-groupChatId</code></td><td>Comma-separated. Run /chatid in the group to find it.</td></tr>
+      <tr><td><code>AWS_REGION</code></td><td><code>ap-southeast-1</code></td><td></td></tr>
+      <tr><td><code>AWS_ACCESS_KEY_ID</code></td><td>your permanent key ID</td><td>From Step 1. Not a session token.</td></tr>
+      <tr><td><code>AWS_SECRET_ACCESS_KEY</code></td><td>your permanent secret</td><td>From Step 1.</td></tr>
+      <tr><td><code>AI_MODEL</code></td><td><code>global.anthropic.claude-sonnet-4-6</code></td><td></td></tr>
+      <tr><td><code>HISTORY_MAX_TURNS</code></td><td><code>10</code></td><td></td></tr>
+      <tr><td><code>HISTORY_INACTIVITY_MINUTES</code></td><td><code>30</code></td><td></td></tr>
+      <tr><td><code>HANDOFF_KEYWORDS</code></td><td><code>人工,转人工,投诉,退款,human,agent</code></td><td></td></tr>
+      <tr><td><code>WEBOT_MARKETS_URL</code></td><td>your Webot markets API URL</td><td>From the existing .env</td></tr>
+      <tr><td><code>FAQ_UPDATE_HOUR</code></td><td><code>9</code></td><td>Hour for daily FAQ analysis</td></tr>
+    </table>
+    <div class="callout warning">
+      ⚠️ <strong>Do NOT add <code>AWS_SESSION_TOKEN</code>.</strong> That is only for temporary STS tokens. With permanent IAM keys, leave it out entirely.
+    </div>
+    <p>After saving, Railway redeploys. Watch the <strong>Logs</strong> tab — a successful start looks like:</p>
+<pre>Bot username: @pionexusTestSupportBot
+Listening on port 3000
+Telegram polling mode enabled.
+Agent bot polling mode enabled.
+[faq-updater] Scheduler started — runs daily at 9:00</pre>
+  </div>
+
+  <div class="section" id="verify">
+    <div class="section-header"><div class="step-num">5</div><h2>Verify the Deployment</h2></div>
+    <p>Once the logs show a successful start, test the bot end to end:</p>
+    <ol>
+      <li>Open Telegram and find your user-facing bot</li>
+      <li>Send <code>/start</code> — you should see the welcome message with the menu buttons (Browse FAQs, Business Partnerships, Leave Feedback)</li>
+      <li>Ask <strong>"what is webot"</strong> — the bot should reply with the FAQ answer in English</li>
+      <li>Ask <strong>"what are the withdrawal fees"</strong> — the bot should reply with the formatted fee table in a monospace code block</li>
+      <li>In the agent group, send <code>SESSIONS</code> — the agent bot should reply listing active tickets (or say none)</li>
+    </ol>
+    <div class="callout success">
+      ✅ If all five tests pass, your bot is live and running 24/7 on Railway.
+    </div>
+    <div class="callout info">
+      ℹ️ <strong>Updating the bot:</strong> Push any code change to GitHub — Railway auto-deploys within seconds. To update the knowledge base only, edit <code>data/knowledge-base.json</code>, commit, and push.
+    </div>
+  </div>
+
+  <div class="section" id="troubleshoot">
+    <div class="section-header">
+      <div class="step-num" style="background:#e11d48">!</div>
+      <h2>Troubleshooting</h2>
+    </div>
+    <table>
+      <tr><th>Symptom</th><th>Likely cause</th><th>Fix</th></tr>
+      <tr>
+        <td>Bot does not respond at all</td>
+        <td>Wrong <code>TELEGRAM_BOT_TOKEN</code> or polling conflict with a local instance</td>
+        <td>Check Railway logs for errors. Stop any locally running instance of the bot first.</td>
+      </tr>
+      <tr>
+        <td>Bot replies in Chinese or transfers to human agent for simple messages like "hi"</td>
+        <td>AWS credentials invalid or expired</td>
+        <td>Double-check <code>AWS_ACCESS_KEY_ID</code> and <code>AWS_SECRET_ACCESS_KEY</code> in Railway Variables. Remove any <code>AWS_SESSION_TOKEN</code>.</td>
+      </tr>
+      <tr>
+        <td>Build fails on Railway</td>
+        <td>Node version mismatch or missing dependency</td>
+        <td>Check that <code>package.json</code> has <code>"engines": { "node": ">=18" }</code>. Check the Railway build log for the exact error.</td>
+      </tr>
+      <tr>
+        <td>Agent commands not working in the group</td>
+        <td>Wrong <code>AGENT_CHAT_IDS</code> or <code>AGENT_BOT_TOKEN</code></td>
+        <td>Send <code>/chatid</code> in the group to get the correct chat ID. Make sure it matches the value in <code>AGENT_CHAT_IDS</code>.</td>
+      </tr>
+      <tr>
+        <td>Knowledge base changes not showing</td>
+        <td>Updated file not committed and pushed</td>
+        <td>Run <code>git add data/knowledge-base.json &amp;&amp; git commit -m "Update KB" &amp;&amp; git push</code>. Railway redeploys automatically.</td>
+      </tr>
+      <tr>
+        <td>Conversation history lost after redeploy</td>
+        <td>Railway has an ephemeral filesystem by default</td>
+        <td>Expected for now. Add a Railway Volume for persistence once you move past testing.</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

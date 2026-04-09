@@ -1,0 +1,1998 @@
+import { config as dotenvConfig } from "dotenv";
+dotenvConfig({ override: true });
+import express from "express";
+import axios from "axios";
+import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
+import { TOOL_DEFINITIONS, executeToolCall } from "./tools.js";
+import { startFaqUpdateScheduler, listPendingSuggestions, approveSuggestions, confirmSuggestions, cancelSuggestions, editSuggestion, rejectSuggestions, listAwaitingConfirm } from "./faq-updater.js";
+import fs from "node:fs/promises";
+import fsSync from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const projectRoot = path.resolve(__dirname, "..");
+
+const env = {
+  mode: (process.env.MODE || "ai").trim().toLowerCase(),
+  telegramMode: (process.env.TELEGRAM_MODE || "polling").trim().toLowerCase(),
+  port: Number(process.env.PORT || 3000),
+  baseUrl: process.env.BASE_URL || "",
+  dataFile: resolveProjectPath(process.env.DATA_FILE || "./data/mappings.json"),
+  knowledgeBaseFile: resolveProjectPath(process.env.KNOWLEDGE_BASE_FILE || "./data/knowledge-base.json"),
+  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || "",
+  telegramWebhookSecret: process.env.TELEGRAM_WEBHOOK_SECRET || "",
+  telegramPollingTimeoutSeconds: Number(process.env.TELEGRAM_POLLING_TIMEOUT_SECONDS || 30),
+  intercomAccessToken: process.env.INTERCOM_ACCESS_TOKEN || "",
+  intercomApiBaseUrl: process.env.INTERCOM_API_BASE_URL || "https://api.intercom.io",
+  intercomApiVersion: process.env.INTERCOM_API_VERSION || "2.14",
+  intercomWebhookSecret: process.env.INTERCOM_WEBHOOK_SECRET || "",
+  awsRegion: process.env.AWS_REGION || "us-east-1",
+  aiModel: process.env.AI_MODEL || "anthropic.claude-haiku-4-5-20251001",
+  aiSystemPrompt: process.env.AI_SYSTEM_PROMPT || "",
+  documentPaths: parseCsv(process.env.DOCUMENT_PATHS) || [],
+  knowledgeDocsDir: resolveProjectPath(process.env.KNOWLEDGE_DOCS_DIR || "./data/docs"),
+  gapLogFile: resolveProjectPath(process.env.GAP_LOG_FILE || "./data/gap-log.jsonl"),
+  agentChatIds: parseCsv(process.env.AGENT_CHAT_IDS) || [],
+  agentBotToken: process.env.AGENT_BOT_TOKEN || "",
+  historyMaxTurns: Number(process.env.HISTORY_MAX_TURNS || 10),
+  historyInactivityMs: Number(process.env.HISTORY_INACTIVITY_MINUTES || 30) * 60 * 1000,
+  handoffKeywords: parseCsv(process.env.HANDOFF_KEYWORDS) || [
+    "人工",
+    "转人工",
+    "人工客服",
+    "投诉",
+    "退款",
+    "合作",
+    "紧急",
+    "urgent",
+    "human",
+    "agent"
+  ],
+  humanHandoffText:
+    process.env.HUMAN_HANDOFF_TEXT ||
+    "这个问题我先记录，稍后由人工客服跟进。请留下你的联系方式或更具体的问题描述。",
+  fallbackText:
+    process.env.FALLBACK_TEXT ||
+    "我暂时没有足够信息回答这个问题。你可以换个问法，或者我可以帮你转人工。"
+};
+
+const requiredVars = [
+  "TELEGRAM_BOT_TOKEN"
+].filter((name) => !process.env[name]);
+
+if (requiredVars.length > 0) {
+  console.warn(`Missing env vars: ${requiredVars.join(", ")}`);
+}
+
+const app = express();
+app.use(express.json({ limit: "1mb" }));
+
+const anthropicClient = new AnthropicBedrock({
+  awsRegion: env.awsRegion,
+  timeout: 30000 // 30s timeout
+});
+
+const intercomClient = axios.create({
+  baseURL: env.intercomApiBaseUrl,
+  headers: {
+    Authorization: `Bearer ${env.intercomAccessToken}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    "Intercom-Version": env.intercomApiVersion
+  },
+  timeout: 15000
+});
+
+const telegramClient = axios.create({
+  baseURL: `https://api.telegram.org/bot${env.telegramBotToken}`,
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000
+});
+
+// Agent bot — separate bot token for sending notifications/replies to agents
+const agentBotToken = env.agentBotToken || env.telegramBotToken;
+const agentBotClient = axios.create({
+  baseURL: `https://api.telegram.org/bot${agentBotToken}`,
+  headers: { "Content-Type": "application/json" },
+  timeout: 15000
+});
+
+let writeChain = Promise.resolve();
+let telegramPollingOffset = 0;
+let agentBotPollingOffset = 0;
+let botUsername = ""; // fetched on startup via getMe
+
+// Users who have been prompted to enter feedback (chatId -> true)
+const feedbackPending = new Map();
+
+// ---------------------------------------------------------------------------
+// Handoff sessions — in-memory relay between users and agents
+// ---------------------------------------------------------------------------
+
+const handoffSessions = new Map(); // ref -> session
+const userHandoffMap = new Map();  // userChatId -> ref
+
+function generateSessionRef() {
+  let ref;
+  do { ref = Math.random().toString(36).substring(2, 6).toUpperCase(); }
+  while (handoffSessions.has(ref));
+  return ref;
+}
+
+function createHandoffSession(message) {
+  const ref = generateSessionRef();
+  const session = {
+    ref,
+    userChatId: String(message.chat.id),
+    userName: buildTelegramDisplayName(message.from),
+    startedAt: new Date().toISOString(),
+    lastActivityAt: Date.now(),
+    lastUserMessageAt: Date.now(), // tracks user's last message for inactivity check
+    status: "open",       // "open" | "claimed" | "resolved"
+    claimedBy: null,      // { id, name } when claimed
+    claimedAt: null,
+    lastMessage: null,    // most recent user message for reminders
+    lastReminderAt: null, // timestamp of last reminder sent
+    userReminderSentAt: null // timestamp of last user inactivity reminder
+  };
+  handoffSessions.set(ref, session);
+  userHandoffMap.set(session.userChatId, ref);
+  return session;
+}
+
+function closeHandoffSession(ref) {
+  const session = handoffSessions.get(ref);
+  if (session) {
+    userHandoffMap.delete(session.userChatId);
+    handoffSessions.delete(ref);
+  }
+  return session;
+}
+
+function getSessionByUserChatId(chatId) {
+  const ref = userHandoffMap.get(String(chatId));
+  return ref ? handoffSessions.get(ref) : null;
+}
+
+function isAgentChat(chatId) {
+  return env.agentChatIds.includes(String(chatId));
+}
+
+// ---------------------------------------------------------------------------
+// Conversation history — in-memory, keyed by Telegram chat ID
+// ---------------------------------------------------------------------------
+
+const conversationHistories = new Map();
+
+function getConversationHistory(chatId) {
+  const entry = conversationHistories.get(String(chatId));
+  if (!entry) return [];
+  if (Date.now() - entry.lastActivityAt > env.historyInactivityMs) {
+    conversationHistories.delete(String(chatId));
+    return [];
+  }
+  return entry.messages;
+}
+
+function appendConversationHistory(chatId, userText, assistantText, intent) {
+  const id = String(chatId);
+  const entry = conversationHistories.get(id) || { messages: [], lastActivityAt: 0 };
+  // Store assistant message as JSON to stay consistent with the response format the AI produces
+  const assistantJson = JSON.stringify({ intent: intent || "answer", reply: assistantText });
+  entry.messages.push(
+    { role: "user", content: userText },
+    { role: "assistant", content: assistantJson }
+  );
+  const maxMessages = env.historyMaxTurns * 2;
+  if (entry.messages.length > maxMessages) {
+    entry.messages = entry.messages.slice(-maxMessages);
+  }
+  entry.lastActivityAt = Date.now();
+  conversationHistories.set(id, entry);
+}
+
+function clearConversationHistory(chatId) {
+  conversationHistories.delete(String(chatId));
+}
+
+// ---------------------------------------------------------------------------
+// Gap logging — unanswered / handed-off questions saved for KB review
+// ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Agent notification — sends handoff alert to all configured agent chats
+// ---------------------------------------------------------------------------
+
+async function notifyAgents({ message, userText, intent }) {
+  console.log(`[notifyAgents] agentChatIds=${JSON.stringify(env.agentChatIds)} intent=${intent}`);
+  if (!env.agentChatIds.length) {
+    console.log("[notifyAgents] no agent chat IDs configured, skipping");
+    return null;
+  }
+
+  const session = createHandoffSession(message);
+  const history = getConversationHistory(message.chat.id);
+  const recentTurns = history.slice(-6);
+  const historyText = recentTurns.length
+    ? recentTurns.map((m) => `${m.role === "user" ? "User" : "Bot"}: ${m.content}`).join("\n")
+    : "(no prior history)";
+
+  session.lastMessage = userText;
+
+  const notification = [
+    `🎫 New Ticket [#${session.ref}] — OPEN`,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `👤 User: ${session.userName}`,
+    `📋 Reason: ${intent === "user_requested" ? "User requested human agent" : "AI could not resolve"}`,
+    ``,
+    `💬 User's message:`,
+    `"${userText}"`,
+    ``,
+    `📜 Recent conversation:`,
+    historyText,
+    `━━━━━━━━━━━━━━━━━━━━`,
+    `Claim this ticket:  TAKE #${session.ref}`,
+    `Reply to user:      REPLY #${session.ref} your message`,
+    `Close ticket:       RESOLVE #${session.ref}`,
+    `All open tickets:   SESSIONS`
+  ].join("\n");
+
+  const results = await Promise.allSettled(
+    env.agentChatIds.map((chatId) =>
+      agentBotClient.post("/sendMessage", { chat_id: chatId, text: notification })
+    )
+  );
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`[notifyAgents] failed to notify ${env.agentChatIds[i]}:`, r.reason?.response?.data || r.reason?.message);
+    } else {
+      console.log(`[notifyAgents] notified ${env.agentChatIds[i]} OK`);
+    }
+  });
+
+  return session;
+}
+
+async function sendAgentMessage(chatId, text) {
+  await agentBotClient.post("/sendMessage", { chat_id: chatId, text });
+}
+
+async function handleAgentCommand(agentChatId, text, from = null) {
+  const cmd = text.trim().replace(/^\//, ""); // strip leading slash if present
+  const upper = cmd.toUpperCase();
+  const agentName = from ? (from.username ? `@${from.username}` : from.first_name) : "Agent";
+
+  // SESSIONS — list active sessions
+  if (upper === "SESSIONS" || upper === "STATUS" || upper === "QUEUE") {
+    if (handoffSessions.size === 0) {
+      await sendAgentMessage(agentChatId, "No active tickets in the queue.");
+      return;
+    }
+    const open = [...handoffSessions.values()].filter((s) => s.status === "open");
+    const claimed = [...handoffSessions.values()].filter((s) => s.status === "claimed");
+    const lines = ["Support Queue", "━━━━━━━━━━━━━━━━━━━━"];
+    if (open.length) {
+      lines.push(`🔴 OPEN (${open.length})`);
+      open.forEach((s) => {
+        const age = Math.floor((Date.now() - new Date(s.startedAt).getTime()) / 60000);
+        lines.push(`  #${s.ref} — ${s.userName} (${age}m ago)`);
+        lines.push(`  Claim: TAKE #${s.ref}`);
+      });
+    }
+    if (claimed.length) {
+      lines.push(`🟢 CLAIMED (${claimed.length})`);
+      claimed.forEach((s) => {
+        const age = Math.floor((Date.now() - new Date(s.startedAt).getTime()) / 60000);
+        lines.push(`  #${s.ref} — ${s.userName} → ${s.claimedBy.name} (${age}m ago)`);
+      });
+    }
+    await sendAgentMessage(agentChatId, lines.join("\n"));
+    return;
+  }
+
+  // TAKE #REF — agent claims a ticket
+  if (upper.startsWith("TAKE")) {
+    const refMatch = cmd.match(/TAKE\s+#?([A-Z0-9]{4})/i);
+    const session = refMatch
+      ? handoffSessions.get(refMatch[1].toUpperCase())
+      : handoffSessions.size === 1 ? [...handoffSessions.values()][0] : null;
+
+    if (!session) {
+      const hint = handoffSessions.size > 1 ? " Use TAKE #REF to specify." : "";
+      await sendAgentMessage(agentChatId, `Ticket not found.${hint}`);
+      return;
+    }
+    if (session.status === "claimed") {
+      await sendAgentMessage(agentChatId, `Ticket #${session.ref} is already claimed by ${session.claimedBy.name}.`);
+      return;
+    }
+    session.status = "claimed";
+    session.claimedBy = { id: from?.id, name: agentName };
+    session.claimedAt = Date.now();
+    // Announce claim to all agent chats
+    const claimMsg = `✅ Ticket #${session.ref} claimed by ${agentName}\n👤 User: ${session.userName}\nReply: REPLY #${session.ref} your message`;
+    await Promise.allSettled(
+      env.agentChatIds.map((id) => agentBotClient.post("/sendMessage", { chat_id: id, text: claimMsg }))
+    );
+    return;
+  }
+
+  // RESOLVE [#REF]
+  if (upper.startsWith("RESOLVE")) {
+    const refMatch = cmd.match(/RESOLVE\s+#?([A-Z0-9]{4})/i);
+    const session = refMatch
+      ? handoffSessions.get(refMatch[1].toUpperCase())
+      : handoffSessions.size === 1 ? [...handoffSessions.values()][0] : null;
+
+    if (!session) {
+      const hint = handoffSessions.size > 1 ? " Use RESOLVE #REF when multiple sessions are active." : "";
+      await sendAgentMessage(agentChatId, `No active session found.${hint}`);
+      return;
+    }
+    closeHandoffSession(session.ref);
+    await sendTelegramMessage(session.userChatId, "Your support session has ended. Thank you for contacting Webot support. Feel free to ask if you have more questions!");
+    await sendAgentMessage(agentChatId, `Session #${session.ref} resolved.`);
+    return;
+  }
+
+  // REPLY [#REF] <message>
+  if (upper.startsWith("REPLY")) {
+    const withoutCmd = cmd.slice(5).trim();
+    const refMatch = withoutCmd.match(/^#?([A-Z0-9]{4})\s+([\s\S]+)$/i);
+    let session, messageText;
+
+    if (refMatch) {
+      session = handoffSessions.get(refMatch[1].toUpperCase());
+      messageText = refMatch[2];
+    } else if (handoffSessions.size === 1) {
+      session = [...handoffSessions.values()][0];
+      messageText = withoutCmd;
+    } else if (handoffSessions.size === 0) {
+      await sendAgentMessage(agentChatId, "No active sessions.");
+      return;
+    } else {
+      const list = [...handoffSessions.values()].map((s) => `#${s.ref}: ${s.userName}`).join("\n");
+      await sendAgentMessage(agentChatId, `Multiple active sessions. Use REPLY #REF <message>:\n${list}`);
+      return;
+    }
+
+    if (!session) {
+      await sendAgentMessage(agentChatId, `Session not found. Type SESSIONS to see active sessions.`);
+      return;
+    }
+    if (!messageText?.trim()) {
+      await sendAgentMessage(agentChatId, "Message cannot be empty.");
+      return;
+    }
+
+    console.log(`[relay] sending to userChatId=${session.userChatId} msg="${messageText.trim()}"`);
+    await sendTelegramMessage(session.userChatId, messageText.trim());
+    await sendAgentMessage(agentChatId, `Sent to #${session.ref}.`);
+    session.lastActivityAt = Date.now();
+    return;
+  }
+
+  // SUGGESTIONS — list pending and awaiting_confirm FAQ suggestions
+  if (upper === "SUGGESTIONS" || upper === "SUGGEST") {
+    const pending = await listPendingSuggestions();
+    const awaiting = await listAwaitingConfirm();
+
+    if (!pending.length && !awaiting.length) {
+      await sendAgentMessage(agentChatId, "No pending FAQ suggestions right now.");
+      return;
+    }
+
+    if (awaiting.length) {
+      await sendAgentMessage(agentChatId, `⏳ Awaiting Confirmation (${awaiting.length})\n━━━━━━━━━━━━━━━━━━━━`);
+      for (let i = 0; i < awaiting.length; i++) {
+        const s = awaiting[i];
+        const msg = [
+          `#${i + 1} [${s.draft.category}] — awaiting confirm`,
+          `Question: ${s.draft.question}`,
+          ``,
+          `Answer:`,
+          s.draft.answer,
+          ``,
+          `Keywords: ${(s.draft.keywords || []).join(", ")}`
+        ].join("\n");
+        await sendAgentMessage(agentChatId, msg);
+      }
+      await sendAgentMessage(agentChatId, "CONFIRM ALL  |  CONFIRM #1  |  CANCEL #1  |  EDIT #1 ANSWER <text>");
+    }
+
+    if (pending.length) {
+      await sendAgentMessage(agentChatId, `📝 Pending Suggestions (${pending.length})\n━━━━━━━━━━━━━━━━━━━━`);
+      for (let i = 0; i < pending.length; i++) {
+        const s = pending[i];
+        const msg = [
+          `#${i + 1} [${s.draft.category}]`,
+          `Question: ${s.draft.question}`,
+          ``,
+          `Answer:`,
+          s.draft.answer,
+          ``,
+          `Keywords: ${(s.draft.keywords || []).join(", ")}`,
+          `Sources: ${(s.source_questions || []).slice(0, 3).join(" / ")}`
+        ].join("\n");
+        await sendAgentMessage(agentChatId, msg);
+      }
+      await sendAgentMessage(agentChatId, "APPROVE ALL  |  APPROVE #1 #2  |  REJECT #1  |  EDIT #1 ANSWER <text>");
+    }
+    return;
+  }
+
+  // APPROVE [ALL | #1 #2 ...] — moves to awaiting_confirm for preview
+  if (upper.startsWith("APPROVE")) {
+    const rest = cmd.slice(7).trim().toUpperCase();
+    const indices = rest === "ALL" ? "all" : (rest.match(/\d+/g) || []).map(Number);
+    if (!indices || (Array.isArray(indices) && !indices.length)) {
+      await sendAgentMessage(agentChatId, "Usage: APPROVE ALL  or  APPROVE #1 #2");
+      return;
+    }
+    const result = await approveSuggestions(indices);
+    await sendAgentMessage(agentChatId, result.message);
+    return;
+  }
+
+  // CONFIRM [ALL | #1 #2 ...] — publishes to knowledge base
+  if (upper.startsWith("CONFIRM")) {
+    const rest = cmd.slice(7).trim().toUpperCase();
+    const indices = rest === "ALL" ? "all" : (rest.match(/\d+/g) || []).map(Number);
+    if (!indices || (Array.isArray(indices) && !indices.length)) {
+      await sendAgentMessage(agentChatId, "Usage: CONFIRM ALL  or  CONFIRM #1 #2");
+      return;
+    }
+    const result = await confirmSuggestions(indices);
+    await sendAgentMessage(agentChatId, result.message);
+    return;
+  }
+
+  // CANCEL [ALL | #1 #2 ...] — returns awaiting_confirm back to pending
+  if (upper.startsWith("CANCEL")) {
+    const rest = cmd.slice(6).trim().toUpperCase();
+    const indices = rest === "ALL" ? "all" : (rest.match(/\d+/g) || []).map(Number);
+    if (!indices || (Array.isArray(indices) && !indices.length)) {
+      await sendAgentMessage(agentChatId, "Usage: CANCEL ALL  or  CANCEL #1");
+      return;
+    }
+    const result = await cancelSuggestions(indices);
+    await sendAgentMessage(agentChatId, result.message);
+    return;
+  }
+
+  // EDIT #1 FIELD <text>
+  // e.g. EDIT #1 ANSWER The fee is 0.1%
+  //      EDIT #2 QUESTION How do I deposit?
+  //      EDIT #1 KEYWORDS fee, trading, cost
+  if (upper.startsWith("EDIT")) {
+    const editMatch = cmd.match(/^EDIT\s+#?(\d+)\s+(ANSWER|QUESTION|CATEGORY|KEYWORDS)\s+([\s\S]+)$/i);
+    if (!editMatch) {
+      await sendAgentMessage(agentChatId,
+        "Usage: EDIT #1 ANSWER <new answer text>\n" +
+        "       EDIT #1 QUESTION <new question text>\n" +
+        "       EDIT #1 CATEGORY <category>\n" +
+        "       EDIT #1 KEYWORDS keyword1, keyword2"
+      );
+      return;
+    }
+    const [, indexStr, field, newText] = editMatch;
+    const result = await editSuggestion(Number(indexStr), field.toLowerCase(), newText.trim());
+    await sendAgentMessage(agentChatId, result.error ? `⚠️ ${result.error}` : result.message);
+    return;
+  }
+
+  // REJECT [ALL | #1 #2 ...]
+  if (upper.startsWith("REJECT")) {
+    const rest = cmd.slice(6).trim().toUpperCase();
+    const indices = rest === "ALL" ? "all" : (rest.match(/\d+/g) || []).map(Number);
+    if (!indices || (Array.isArray(indices) && !indices.length)) {
+      await sendAgentMessage(agentChatId, "Usage: REJECT ALL  or  REJECT #1 #2");
+      return;
+    }
+    const result = await rejectSuggestions(indices);
+    await sendAgentMessage(agentChatId, `🗑️ ${result.message}`);
+    return;
+  }
+
+  // Unknown command — show help
+  await sendAgentMessage(agentChatId, [
+    "Webot Agent Commands",
+    "━━━━━━━━━━━━━━━━━━━━",
+    "TAKE #REF         — claim a ticket",
+    "REPLY #REF msg    — reply to a user",
+    "RESOLVE #REF      — close a ticket",
+    "SESSIONS          — view the full queue",
+    "",
+    "FAQ Suggestions:",
+    "SUGGESTIONS       — view all suggestions",
+    "APPROVE ALL       — stage all for preview",
+    "APPROVE #1 #2     — stage specific suggestions",
+    "EDIT #1 ANSWER … — edit before confirming",
+    "CONFIRM ALL       — publish to knowledge base",
+    "CONFIRM #1        — publish specific suggestion",
+    "CANCEL #1         — return to pending",
+    "REJECT #1         — reject a suggestion",
+    "",
+    "Example flow:",
+    "  SUGGESTIONS",
+    "  EDIT #2 ANSWER The fee is 0.1% per trade.",
+    "  APPROVE #1 #2",
+    "  CONFIRM ALL",
+    "",
+    "(#REF is optional when only 1 ticket is active)"
+  ].join("\n"));
+}
+
+async function forwardUserMessageToAgent(session, userText) {
+  session.lastMessage = userText;
+  session.lastUserMessageAt = Date.now();
+  session.userReminderSentAt = null; // reset reminder on new message
+  const claimedInfo = session.claimedBy ? ` → ${session.claimedBy.name}` : " (OPEN — use TAKE #" + session.ref + " to claim)";
+  const notification = `💬 [#${session.ref}]${claimedInfo}\n${session.userName}: ${userText}\n\nReply: REPLY #${session.ref} your message`;
+  await Promise.allSettled(
+    env.agentChatIds.map((chatId) =>
+      agentBotClient.post("/sendMessage", { chat_id: chatId, text: notification })
+    )
+  );
+}
+
+async function logGap({ userText, intent, hadPartialFaqMatch }) {
+  const entry = {
+    ts: new Date().toISOString(),
+    intent,
+    hadPartialFaqMatch,
+    question: userText
+  };
+  try {
+    await fs.mkdir(path.dirname(env.gapLogFile), { recursive: true });
+    await fs.appendFile(env.gapLogFile, JSON.stringify(entry) + "\n");
+  } catch (err) {
+    console.error("Failed to write gap log", err.message);
+  }
+}
+
+async function logConversation({ chatId, userName, userText, botReply, intent, faqMatched, inGroup, lang }) {
+  const entry = {
+    ts: new Date().toISOString(),
+    chat_id: String(chatId),
+    user_name: userName || null,
+    in_group: inGroup,
+    lang,
+    user_message: userText,
+    bot_reply: botReply,
+    intent,                          // answer | handoff | fallback | ignore | welcome
+    faq_matched: faqMatched || null  // FAQ id if a match was used
+  };
+  try {
+    const logFile = path.join(path.dirname(env.gapLogFile), "conversation-log.jsonl");
+    await fs.mkdir(path.dirname(logFile), { recursive: true });
+    await fs.appendFile(logFile, JSON.stringify(entry) + "\n");
+  } catch (err) {
+    console.error("Failed to write conversation log", err.message);
+  }
+}
+
+app.get("/", async (_req, res) => {
+  res.json({
+    ok: true,
+    service: env.mode === "intercom" ? "tg-intercom-bridge" : "tg-ai-demo-bot",
+    mode: env.mode,
+    telegramMode: env.telegramMode,
+    telegramWebhook: joinBaseUrl("/webhooks/telegram"),
+    intercomWebhook: joinBaseUrl(`/webhooks/intercom?secret=${env.intercomWebhookSecret || "YOUR_SECRET"}`)
+  });
+});
+
+app.head("/webhooks/intercom", async (_req, res) => {
+  res.sendStatus(200);
+});
+
+app.post("/webhooks/telegram", async (req, res) => {
+  try {
+    verifyTelegramSecret(req);
+
+    const message = extractTelegramMessage(req.body);
+    if (!message) {
+      res.status(200).json({ ok: true, ignored: "unsupported_update" });
+      return;
+    }
+
+    const inGroup = isGroupChat(message);
+
+    const rawText = message.text?.trim();
+    const userText = inGroup ? stripBotMention(rawText || "") : rawText;
+    const replyToMessageId = inGroup ? message.message_id : undefined;
+
+    if (!userText) {
+      await sendTelegramMessage(message.chat.id, "Only text messages are supported right now.", replyToMessageId);
+      res.status(200).json({ ok: true, ignored: "non_text_message" });
+      return;
+    }
+
+    // Agent chat — handle commands
+    if (isAgentChat(String(message.chat.id))) {
+      await handleAgentCommand(String(message.chat.id), userText);
+      res.status(200).json({ ok: true, mode: "agent_command" });
+      return;
+    }
+
+    // User in active handoff — forward to agent
+    const activeSession = getSessionByUserChatId(message.chat.id);
+    if (activeSession) {
+      await forwardUserMessageToAgent(activeSession, userText);
+      await sendTelegramMessage(message.chat.id, "Your message has been forwarded to our support agent.", replyToMessageId);
+      res.status(200).json({ ok: true, mode: "relay" });
+      return;
+    }
+
+    if (env.mode === "ai") {
+      const messageWithStrippedText = { ...message, text: userText };
+      const reply = await buildAiReply(messageWithStrippedText);
+      await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
+      await upsertMapping({
+        telegramChatId: String(message.chat.id),
+        telegramUserId: String(message.from.id),
+        telegramUsername: message.from.username || "",
+        telegramName: buildTelegramDisplayName(message.from),
+        lastInboundText: userText,
+        lastOutboundText: reply.text,
+        lastIntent: reply.intent,
+        lastActivityAt: new Date().toISOString(),
+        status: reply.intent === "handoff" ? "handoff_requested" : "open"
+      });
+      res.status(200).json({ ok: true, mode: env.mode, intent: reply.intent });
+      return;
+    }
+
+    const contact = await getOrCreateIntercomContact(message.from);
+    const store = await readStore();
+    const existingMapping = store.byTelegramChatId[String(message.chat.id)];
+
+    let conversationId = existingMapping?.intercomConversationId;
+    if (conversationId) {
+      await replyToIntercomConversation(conversationId, contact.id, userText);
+    } else {
+      const createdMessage = await createIntercomConversation(contact.id, userText);
+      conversationId = extractConversationId(createdMessage);
+      if (!conversationId) {
+        throw new Error("Intercom did not return a conversation_id for the new conversation.");
+      }
+    }
+
+    await upsertMapping({
+      telegramChatId: String(message.chat.id),
+      telegramUserId: String(message.from.id),
+      telegramUsername: message.from.username || "",
+      telegramName: buildTelegramDisplayName(message.from),
+      intercomContactId: contact.id,
+      intercomConversationId: conversationId,
+      lastInboundText: userText,
+      lastActivityAt: new Date().toISOString(),
+      status: "open"
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("Telegram webhook error", formatError(error));
+    res.status(error.status || 500).json({ ok: false });
+  }
+});
+
+app.post("/webhooks/intercom", async (req, res) => {
+  try {
+    verifyIntercomSecret(req);
+
+    const topic = req.body?.topic || req.body?.data?.topic || "";
+    if (!["conversation.admin.replied", "conversation.operator.replied"].includes(topic)) {
+      res.status(200).json({ ok: true, ignored: "topic_not_forwarded" });
+      return;
+    }
+
+    const conversationId = extractConversationId(req.body);
+    if (!conversationId) {
+      res.status(200).json({ ok: true, ignored: "no_conversation_id" });
+      return;
+    }
+
+    const store = await readStore();
+    const mapping = store.byConversationId[String(conversationId)];
+    if (!mapping) {
+      res.status(200).json({ ok: true, ignored: "unmapped_conversation" });
+      return;
+    }
+
+    let text = extractReplyText(req.body);
+    if (!text) {
+      const conversation = await getIntercomConversation(conversationId);
+      text = extractReplyText(conversation);
+    }
+
+    if (!text) {
+      res.status(200).json({ ok: true, ignored: "empty_reply" });
+      return;
+    }
+
+    await sendTelegramMessage(mapping.telegramChatId, text);
+    await upsertMapping({
+      ...mapping,
+      lastOutboundText: text,
+      lastActivityAt: new Date().toISOString()
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (error) {
+    console.error("Intercom webhook error", formatError(error));
+    res.status(error.status || 500).json({ ok: false });
+  }
+});
+
+app.listen(env.port, async () => {
+  await ensureStore();
+  await fetchBotInfo();
+  console.log(`Listening on port ${env.port}`);
+  if (env.telegramMode === "polling") {
+    await deleteTelegramWebhook();
+    await sleep(3000); // wait for any stale polling connections to expire
+    startTelegramPollingLoop().catch((error) => {
+      console.error("Telegram polling loop stopped", formatError(error));
+    });
+    if (env.agentBotToken) {
+      startAgentBotPollingLoop().catch((error) => {
+        console.error("Agent bot polling loop stopped", formatError(error));
+      });
+    }
+  }
+  startTicketReminderLoop();
+  startUserInactivityLoop();
+  startFaqUpdateScheduler({
+    anthropicClient,
+    model: env.aiModel,
+    notifyAgents: (text) => Promise.allSettled(
+      env.agentChatIds.map((id) => agentBotClient.post("/sendMessage", { chat_id: id, text }))
+    )
+  });
+});
+
+function startUserInactivityLoop() {
+  const INACTIVITY_MS = 10 * 60 * 1000; // 10 minutes
+  setInterval(async () => {
+    const now = Date.now();
+    for (const session of [...handoffSessions.values()]) {
+      const lastMsg = session.lastUserMessageAt || new Date(session.startedAt).getTime();
+      if (now - lastMsg < INACTIVITY_MS) continue;
+      console.log(`[inactivity] auto-closing ticket #${session.ref} after 10min inactivity`);
+      closeHandoffSession(session.ref);
+      await Promise.allSettled(
+        env.agentChatIds.map((id) =>
+          agentBotClient.post("/sendMessage", { chat_id: id, text: `🕐 Ticket #${session.ref} auto-closed — user inactive for 10 minutes.` })
+        )
+      );
+      try {
+        await sendWithKeyboard(session.userChatId,
+          "Your support session has been automatically closed as we haven't heard from you in a while. If you still need help, feel free to reach out anytime!",
+          [[{ text: "« Back to menu", callback_data: "home" }]]
+        );
+      } catch (err) {
+        console.error(`[inactivity] failed to notify user for #${session.ref}:`, err.message);
+      }
+    }
+  }, 60 * 1000); // check every minute
+}
+
+function startTicketReminderLoop() {
+  const REMINDER_INTERVAL_MS = 3 * 60 * 1000; // 3 minutes
+  setInterval(async () => {
+    const now = Date.now();
+    for (const session of handoffSessions.values()) {
+      if (session.status !== "open") continue;
+      const age = now - new Date(session.startedAt).getTime();
+      if (age < REMINDER_INTERVAL_MS) continue;
+      const lastReminder = session.lastReminderAt || new Date(session.startedAt).getTime();
+      if (now - lastReminder < REMINDER_INTERVAL_MS) continue;
+      session.lastReminderAt = now;
+      const ageMin = Math.floor(age / 60000);
+      const reminder = [
+        `⏰ Reminder: Ticket [#${session.ref}] is still UNCLAIMED (${ageMin} min)`,
+        `👤 ${session.userName}: "${session.lastMessage || "..."}"`,
+        `Claim now: TAKE #${session.ref}`
+      ].join("\n");
+      await Promise.allSettled(
+        env.agentChatIds.map((id) => agentBotClient.post("/sendMessage", { chat_id: id, text: reminder }))
+      );
+      console.log(`[reminder] sent for unclaimed ticket #${session.ref}`);
+    }
+  }, 60 * 1000); // check every minute
+}
+
+async function fetchBotInfo() {
+  try {
+    const res = await telegramClient.get("/getMe");
+    botUsername = res.data?.result?.username || "";
+    console.log(`Bot username: @${botUsername}`);
+  } catch (err) {
+    console.error("Failed to fetch bot info", err.message);
+  }
+}
+
+function isGroupChat(message) {
+  return ["group", "supergroup"].includes(message.chat?.type);
+}
+
+function isBotMentioned(message) {
+  if (!botUsername) return false;
+  const mention = `@${botUsername}`.toLowerCase();
+  const text = (message.text || "").toLowerCase();
+  if (text.includes(mention)) return true;
+  // Also check entities for explicit @mention
+  const entities = message.entities || [];
+  return entities.some((e) => e.type === "mention" && text.slice(e.offset, e.offset + e.length) === mention);
+}
+
+function stripBotMention(text) {
+  if (!botUsername) return text;
+  return text.replace(new RegExp(`@${botUsername}\\s*`, "gi"), "").trim();
+}
+
+function resolveProjectPath(filePath) {
+  return path.isAbsolute(filePath) ? filePath : path.resolve(projectRoot, filePath);
+}
+
+function joinBaseUrl(route) {
+  if (!env.baseUrl) {
+    return route;
+  }
+  return `${env.baseUrl.replace(/\/$/, "")}${route}`;
+}
+
+async function ensureStore() {
+  await fs.mkdir(path.dirname(env.dataFile), { recursive: true });
+  try {
+    await fs.access(env.dataFile);
+  } catch {
+    await fs.writeFile(
+      env.dataFile,
+      JSON.stringify({ byTelegramChatId: {}, byConversationId: {} }, null, 2)
+    );
+  }
+
+  await ensureKnowledgeBase();
+}
+
+async function readStore() {
+  await ensureStore();
+  const raw = await fs.readFile(env.dataFile, "utf8");
+  return JSON.parse(raw);
+}
+
+async function writeStore(nextStore) {
+  writeChain = writeChain.then(async () => {
+    await fs.mkdir(path.dirname(env.dataFile), { recursive: true });
+    await fs.writeFile(env.dataFile, JSON.stringify(nextStore, null, 2));
+  });
+  await writeChain;
+}
+
+async function upsertMapping(mapping) {
+  const store = await readStore();
+  store.byTelegramChatId[mapping.telegramChatId] = mapping;
+  if (mapping.intercomConversationId) {
+    store.byConversationId[mapping.intercomConversationId] = mapping;
+  }
+  await writeStore(store);
+}
+
+async function ensureKnowledgeBase() {
+  await fs.mkdir(path.dirname(env.knowledgeBaseFile), { recursive: true });
+  if (fsSync.existsSync(env.knowledgeBaseFile)) {
+    return;
+  }
+
+  const seed = {
+    businessName: "Webot (formerly Pionex.US)",
+    summary: "Webot (formerly Pionex.US) is a US-based cryptocurrency trading platform offering automated trading bots, spot trading, and portfolio management tools.",
+    handoffContact: "@pionexusTestSupportBot",
+    faqs: []
+  };
+
+  await fs.writeFile(env.knowledgeBaseFile, JSON.stringify(seed, null, 2));
+}
+
+function verifyTelegramSecret(req) {
+  if (!env.telegramWebhookSecret) {
+    return;
+  }
+  const providedSecret = req.get("x-telegram-bot-api-secret-token");
+  if (providedSecret !== env.telegramWebhookSecret) {
+    const error = new Error("Telegram webhook secret mismatch.");
+    error.status = 401;
+    throw error;
+  }
+}
+
+function verifyIntercomSecret(req) {
+  if (!env.intercomWebhookSecret) {
+    return;
+  }
+  if (req.query.secret !== env.intercomWebhookSecret) {
+    const error = new Error("Intercom webhook secret mismatch.");
+    error.status = 401;
+    throw error;
+  }
+}
+
+function extractTelegramMessage(update) {
+  return update?.message || update?.edited_message || null;
+}
+
+function buildTelegramDisplayName(user) {
+  return [user.first_name, user.last_name].filter(Boolean).join(" ").trim() || user.username || `Telegram ${user.id}`;
+}
+
+async function getOrCreateIntercomContact(telegramUser) {
+  const externalId = `telegram:${telegramUser.id}`;
+
+  try {
+    const existing = await intercomClient.get(`/contacts/find_by_external_id/${encodeURIComponent(externalId)}`);
+    return existing.data;
+  } catch (error) {
+    if (error.response?.status !== 404) {
+      throw error;
+    }
+  }
+
+  const created = await intercomClient.post("/contacts", {
+    role: "user",
+    external_id: externalId,
+    name: buildTelegramDisplayName(telegramUser)
+  });
+
+  return created.data;
+}
+
+async function createIntercomConversation(contactId, text) {
+  const response = await intercomClient.post("/conversations", {
+    from: {
+      type: "user",
+      id: contactId
+    },
+    body: text
+  });
+
+  return response.data;
+}
+
+async function replyToIntercomConversation(conversationId, contactId, text) {
+  const response = await intercomClient.post(`/conversations/${conversationId}/reply`, {
+    message_type: "comment",
+    type: "user",
+    intercom_user_id: contactId,
+    body: text
+  });
+
+  return response.data;
+}
+
+async function getIntercomConversation(conversationId) {
+  const response = await intercomClient.get(`/conversations/${conversationId}`);
+  return response.data;
+}
+
+function extractConversationId(payload) {
+  const directConversationId = payload?.type === "conversation" ? payload.id : null;
+  const value =
+    payload?.conversation_id ||
+    directConversationId ||
+    payload?.data?.item?.id ||
+    payload?.data?.conversation?.id ||
+    payload?.conversation?.id ||
+    payload?.data?.item?.conversation_id ||
+    "";
+
+  return String(value).trim() || null;
+}
+
+function extractReplyText(payload) {
+  const candidates = [];
+
+  const conversation = payload?.data?.item?.type === "conversation" ? payload.data.item : payload;
+  const parts = conversation?.conversation_parts?.conversation_parts || [];
+  const latestPart = [...parts].reverse().find(isOutboundPart);
+
+  if (latestPart?.body) {
+    candidates.push(latestPart.body);
+  }
+  if (conversation?.body) {
+    candidates.push(conversation.body);
+  }
+  if (payload?.data?.item?.body) {
+    candidates.push(payload.data.item.body);
+  }
+
+  for (const value of candidates) {
+    const normalized = normalizeIntercomText(value);
+    if (normalized) {
+      return normalized;
+    }
+  }
+
+  return "";
+}
+
+function isOutboundPart(part) {
+  const authorType = part?.author?.type || part?.admin?.type || "";
+  const partType = part?.part_type || "";
+  return ["admin", "teammate_reference"].includes(authorType) || partType === "operator_reply";
+}
+
+function normalizeIntercomText(text) {
+  if (!text) {
+    return "";
+  }
+
+  return decodeHtmlEntities(
+    String(text)
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/p>/gi, "\n\n")
+      .replace(/<[^>]+>/g, "")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim()
+  );
+}
+
+function decodeHtmlEntities(text) {
+  return text
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'");
+}
+
+function stripMarkdown(text) {
+  // Preserve code blocks — extract, strip other markdown, reinsert
+  const codeBlocks = [];
+  const withPlaceholders = text.replace(/```[\s\S]*?```/g, (m) => {
+    codeBlocks.push(m);
+    return `\x00CB${codeBlocks.length - 1}\x00`;
+  });
+  const stripped = withPlaceholders
+    .replace(/\*\*(.+?)\*\*/g, "$1")
+    .replace(/\*(.+?)\*/g, "$1")
+    .replace(/__(.+?)__/g, "$1")
+    .replace(/_(.+?)_/g, "$1")
+    .replace(/`(.+?)`/g, "$1")
+    .replace(/^#+\s+/gm, "")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .trim();
+  return stripped.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[Number(i)]);
+}
+
+async function sendTelegramMessage(chatId, text, replyToMessageId) {
+  const processed = stripMarkdown(text);
+  const payload = { chat_id: chatId, text: processed };
+  if (replyToMessageId) payload.reply_to_message_id = replyToMessageId;
+  if (processed.includes("```")) payload.parse_mode = "Markdown";
+  await telegramClient.post("/sendMessage", payload);
+}
+
+async function sendTelegramPhoto(chatId, fileId, caption) {
+  await telegramClient.post("/sendPhoto", { chat_id: chatId, photo: fileId, caption: caption || "" });
+}
+
+async function sendWithKeyboard(chatId, text, inlineKeyboard) {
+  await telegramClient.post("/sendMessage", {
+    chat_id: chatId,
+    text,
+    reply_markup: { inline_keyboard: inlineKeyboard }
+  });
+}
+
+async function editMessageKeyboard(chatId, messageId, text, inlineKeyboard) {
+  await telegramClient.post("/editMessageText", {
+    chat_id: chatId,
+    message_id: messageId,
+    text,
+    reply_markup: { inline_keyboard: inlineKeyboard }
+  });
+}
+
+async function answerCallback(callbackQueryId, text = "") {
+  await telegramClient.post("/answerCallbackQuery", { callback_query_id: callbackQueryId, text });
+}
+
+const CATEGORY_LABELS = {
+  "account":      "👤 Account",
+  "deposits":     "💰 Deposits",
+  "withdrawals":  "💸 Withdrawals",
+  "trading-bots": "🤖 Trading Bots",
+  "crypto-assets":"🪙 Crypto Assets",
+  "security":     "🔒 Security",
+  "platform":     "🏠 Platform",
+  "support":      "🎧 Support"
+};
+
+async function processCallbackQuery(cbq) {
+  const chatId = String(cbq.message.chat.id);
+  const msgId = cbq.message.message_id;
+  const data = cbq.data;
+  const lang = detectLanguage("", cbq.message?.text || "");
+
+  await answerCallback(cbq.id);
+
+  // Show category list
+  if (data === "browse_faqs") {
+    const kb = await loadKnowledgeBase();
+    const categories = [...new Set(kb.faqs.map((f) => f.category).filter(Boolean))];
+    const buttons = categories.map((c) => [{
+      text: CATEGORY_LABELS[c] || c,
+      callback_data: `cat_${c}`
+    }]);
+    buttons.push([{ text: "« Back", callback_data: "home" }]);
+    await editMessageKeyboard(chatId, msgId, "Choose a category:", buttons);
+    return;
+  }
+
+  // Show FAQs in a category
+  if (data.startsWith("cat_")) {
+    const category = data.slice(4);
+    const kb = await loadKnowledgeBase();
+    const faqs = kb.faqs.filter((f) => f.category === category);
+    if (!faqs.length) {
+      await sendTelegramMessage(chatId, "No FAQs found in this category.");
+      return;
+    }
+    const buttons = faqs.map((f) => [{ text: f.question, callback_data: `faq_${f.id}` }]);
+    buttons.push([{ text: "« Categories", callback_data: "browse_faqs" }]);
+    const label = CATEGORY_LABELS[category] || category;
+    await editMessageKeyboard(chatId, msgId, `${label} — select a question:`, buttons);
+    return;
+  }
+
+  // Show a specific FAQ answer
+  if (data.startsWith("faq_")) {
+    const faqId = data.slice(4);
+    const kb = await loadKnowledgeBase();
+    const faq = kb.faqs.find((f) => f.id === faqId);
+    if (!faq) {
+      await sendTelegramMessage(chatId, "FAQ not found.");
+      return;
+    }
+    await editMessageKeyboard(chatId, msgId,
+      `${faq.question}\n\n${faq.answer}`,
+      [[{ text: "« Back to category", callback_data: `cat_${faq.category}` }]]
+    );
+    // Send images if any
+    if (faq.images?.length) {
+      await sendFaqImages(chatId, faqId, kb.faqs);
+    }
+    return;
+  }
+
+  // Business partnerships
+  if (data === "partnerships") {
+    await editMessageKeyboard(chatId, msgId,
+      "For business partnerships and collaboration inquiries, please reach out to us at:\n\npartnerships@webot.com\n\nWe typically respond within 1-2 business days.",
+      [[{ text: "« Back", callback_data: "home" }]]
+    );
+    return;
+  }
+
+  // Feedback prompt
+  if (data === "feedback") {
+    feedbackPending.set(chatId, true);
+    await editMessageKeyboard(chatId, msgId,
+      "We'd love to hear from you! Please type your feedback and send it:",
+      [[{ text: "« Cancel", callback_data: "home" }]]
+    );
+    return;
+  }
+
+  // User closes their own ticket
+  if (data.startsWith("close_ticket_")) {
+    const ref = data.slice("close_ticket_".length);
+    const session = handoffSessions.get(ref);
+    if (session) {
+      closeHandoffSession(ref);
+      await Promise.allSettled(
+        env.agentChatIds.map((id) =>
+          agentBotClient.post("/sendMessage", { chat_id: id, text: `✅ Ticket #${ref} closed by user — problem resolved.` })
+        )
+      );
+    }
+    await editMessageKeyboard(chatId, msgId,
+      "Great, glad your problem is solved! Feel free to reach out anytime if you need help.",
+      [[{ text: "« Back to menu", callback_data: "home" }]]
+    );
+    return;
+  }
+
+  // User is still waiting
+  if (data.startsWith("still_waiting_")) {
+    const ref = data.slice("still_waiting_".length);
+    const session = handoffSessions.get(ref);
+    if (session) session.userReminderSentAt = null; // allow re-reminder later
+    await editMessageKeyboard(chatId, msgId,
+      "Thanks for your patience! Our agents are working on your request and will get back to you soon.",
+      []
+    );
+    return;
+  }
+
+  // Back to home
+  if (data === "home") {
+    const kb = await loadKnowledgeBase();
+    const text = buildWelcomeMessage(kb, lang);
+    const keyboard = buildHomeKeyboard();
+    await editMessageKeyboard(chatId, msgId, text, keyboard);
+    return;
+  }
+}
+
+function buildHomeKeyboard() {
+  return [
+    [{ text: "❓ Browse FAQs", callback_data: "browse_faqs" }],
+    [{ text: "🤝 Business Partnerships", callback_data: "partnerships" }],
+    [{ text: "💬 Leave Feedback", callback_data: "feedback" }]
+  ];
+}
+
+async function sendFaqImages(chatId, faqId, faqs) {
+  if (!faqId) return;
+  const faq = faqs.find((f) => f.id === faqId);
+  if (!faq?.images?.length) return;
+  for (const img of faq.images) {
+    try {
+      await sendTelegramPhoto(chatId, img.file_id, img.caption || "");
+    } catch (err) {
+      console.error(`[images] failed to send image for FAQ ${faqId}:`, err.message);
+    }
+  }
+}
+
+async function startTelegramPollingLoop() {
+  console.log("Telegram polling mode enabled.");
+
+  while (true) {
+    try {
+      const response = await telegramClient.get("/getUpdates", {
+        params: {
+          offset: telegramPollingOffset,
+          timeout: env.telegramPollingTimeoutSeconds
+        },
+        timeout: (env.telegramPollingTimeoutSeconds + 10) * 1000
+      });
+
+      const updates = response.data?.result || [];
+      for (const update of updates) {
+        telegramPollingOffset = Number(update.update_id) + 1;
+        try {
+          if (update.callback_query) {
+            await processCallbackQuery(update.callback_query);
+          } else {
+            await processTelegramUpdate(update);
+          }
+        } catch (err) {
+          console.error("processTelegramUpdate error", err.stack || err.message);
+        }
+      }
+    } catch (error) {
+      console.error("Telegram polling error", formatError(error));
+      await sleep(3000);
+    }
+  }
+}
+
+async function startAgentBotPollingLoop() {
+  console.log("Agent bot polling mode enabled.");
+  try {
+    await agentBotClient.post("/deleteWebhook", { drop_pending_updates: false });
+  } catch {}
+
+  while (true) {
+    try {
+      const response = await agentBotClient.get("/getUpdates", {
+        params: { offset: agentBotPollingOffset, timeout: env.telegramPollingTimeoutSeconds },
+        timeout: (env.telegramPollingTimeoutSeconds + 10) * 1000
+      });
+      const updates = response.data?.result || [];
+      for (const update of updates) {
+        agentBotPollingOffset = Number(update.update_id) + 1;
+        const message = extractTelegramMessage(update);
+        if (!message) continue;
+        if (!isAgentChat(String(message.chat.id))) {
+          console.log(`[agent-bot] ignored unauthorized chatId=${message.chat.id}`);
+          continue;
+        }
+        // Photo upload — re-upload via user bot to get a valid file_id
+        if (message.photo?.length) {
+          const largest = message.photo[message.photo.length - 1];
+          const agentFileId = largest.file_id;
+          console.log(`[agent-bot] photo received, re-uploading via user bot...`);
+          try {
+            // Get download URL from agent bot
+            const fileInfo = await agentBotClient.get(`/getFile?file_id=${agentFileId}`);
+            const filePath = fileInfo.data.result.file_path;
+            const fileUrl = `https://api.telegram.org/file/bot${agentBotToken}/${filePath}`;
+            // Download the file bytes
+            const fileRes = await axios.get(fileUrl, { responseType: "arraybuffer" });
+            const fileBytes = Buffer.from(fileRes.data);
+            // Re-upload via user bot using multipart form
+            const FormData = (await import("form-data")).default;
+            const form = new FormData();
+            form.append("chat_id", String(message.chat.id));
+            form.append("photo", fileBytes, { filename: "photo.jpg", contentType: "image/jpeg" });
+            const sent = await telegramClient.post("/sendPhoto", form, { headers: form.getHeaders() });
+            const userBotFileId = sent.data.result.photo.slice(-1)[0].file_id;
+            await sendAgentMessage(String(message.chat.id),
+              `File ID (user bot — ready to use):\n${userBotFileId}\n\nAdd to knowledge base:\n"images": [{ "file_id": "${userBotFileId}", "caption": "description" }]`
+            );
+          } catch (err) {
+            console.error("[agent-bot] photo re-upload failed:", err.message);
+            await sendAgentMessage(String(message.chat.id), `Failed to re-upload photo: ${err.message}`);
+          }
+          continue;
+        }
+        if (!message.text?.trim()) continue;
+        console.log(`[agent-bot] from chatId=${message.chat.id}: ${message.text.trim()}`);
+        await handleAgentCommand(String(message.chat.id), message.text.trim(), message.from);
+      }
+    } catch (error) {
+      console.error("Agent bot polling error", formatError(error));
+      await sleep(3000);
+    }
+  }
+}
+
+async function deleteTelegramWebhook() {
+  try {
+    await telegramClient.post("/deleteWebhook", {
+      drop_pending_updates: false
+    });
+  } catch (error) {
+    console.error("Failed to delete Telegram webhook before polling", formatError(error));
+  }
+}
+
+async function processTelegramUpdate(update) {
+  const message = extractTelegramMessage(update);
+  if (!message) return;
+
+  const chatId = message.chat.id;
+  const inGroup = isGroupChat(message);
+
+  const rawText = message.text?.trim();
+  const userText = inGroup ? stripBotMention(rawText || "") : rawText;
+  const replyToMessageId = inGroup ? message.message_id : undefined;
+
+  // Photo upload from agent — return file_id for knowledge base use
+  // Agents DM the user bot with a screenshot to get a valid file_id
+  if (!inGroup && message.photo?.length && env.agentChatIds.includes(String(chatId))) {
+    const largest = message.photo[message.photo.length - 1];
+    const fileId = largest.file_id;
+    console.log(`[upload] agent photo file_id=${fileId} from chatId=${chatId}`);
+    await sendTelegramMessage(chatId,
+      `File ID (use with user bot):\n${fileId}\n\nAdd to knowledge base:\n"images": [{ "file_id": "${fileId}", "caption": "description" }]`
+    );
+    return;
+  }
+
+  if (!userText) {
+    if (inGroup) {
+      await sendTelegramMessage(chatId, "Hi, this is Webot Customer Service Bot. Feel free to ask me any questions about Webot, and I will try my best to solve your problems.", replyToMessageId);
+    } else {
+      await sendTelegramMessage(chatId, "Only text messages are supported right now.", replyToMessageId);
+    }
+    return;
+  }
+
+  // Feedback collection
+  if (feedbackPending.get(String(chatId)) && userText) {
+    feedbackPending.delete(String(chatId));
+    const entry = JSON.stringify({ ts: new Date().toISOString(), chat_id: String(chatId), feedback: userText }) + "\n";
+    try {
+      await fs.appendFile(path.join(projectRoot, "data/feedback.jsonl"), entry);
+    } catch (err) {
+      console.error("Failed to save feedback:", err.message);
+    }
+    await sendWithKeyboard(chatId,
+      "Thank you for your feedback! We really appreciate it.",
+      [[{ text: "« Back to menu", callback_data: "home" }]]
+    );
+    return;
+  }
+
+  // Agent group chat — handle commands (group chats only, not personal DMs)
+  if (inGroup && isAgentChat(String(chatId))) {
+    console.log(`[agent-cmd] from chatId=${chatId}: ${userText}`);
+    await handleAgentCommand(String(chatId), userText);
+    return;
+  }
+
+  // User in active handoff session — /start or /close exits it, other messages forward to agent
+  const activeSession = getSessionByUserChatId(chatId);
+  if (activeSession) {
+    if (userText.toLowerCase() === "/close" || userText.toLowerCase() === "close") {
+      closeHandoffSession(activeSession.ref);
+      await Promise.allSettled(
+        env.agentChatIds.map((id) =>
+          agentBotClient.post("/sendMessage", { chat_id: id, text: `✅ Ticket #${activeSession.ref} closed by user — problem resolved.` })
+        )
+      );
+      await sendWithKeyboard(chatId,
+        "Great, glad your problem is resolved! Feel free to reach out anytime.",
+        [[{ text: "« Back to menu", callback_data: "home" }]]
+      );
+      return;
+    }
+    if (isStartCommand(userText)) {
+      closeHandoffSession(activeSession.ref);
+      clearConversationHistory(chatId);
+      const kb = await loadKnowledgeBase();
+      await sendWithKeyboard(chatId, buildWelcomeMessage(kb, "en"), buildHomeKeyboard());
+      return;
+    }
+    await forwardUserMessageToAgent(activeSession, userText);
+    const lang = detectLanguage("", message.text || "");
+    const forwardedText = lang === "zh"
+      ? "您的消息已转发给客服人员。"
+      : "Your message has been forwarded to our support agent.";
+    await sendTelegramMessage(chatId, forwardedText, replyToMessageId);
+    return;
+  }
+
+  console.log(`[user-msg] from chatId=${chatId}: ${userText}`);
+
+  if (env.mode === "ai") {
+    const messageWithStrippedText = { ...message, text: userText };
+    const reply = await buildAiReply(messageWithStrippedText, inGroup);
+    // In group chats, silently ignore if no relevant answer found
+    if (inGroup && reply.intent === "ignore") return;
+    // Skip sending if already sent with keyboard (e.g. /start in private chat)
+    if (!reply.skipSend) {
+      await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
+    }
+    // Send tutorial images if the matched FAQ has any
+    if (reply.faqId) {
+      const kb = await loadKnowledgeBase();
+      await sendFaqImages(message.chat.id, reply.faqId, kb.faqs || []);
+    }
+    await upsertMapping({
+      telegramChatId: String(message.chat.id),
+      telegramUserId: String(message.from.id),
+      telegramUsername: message.from.username || "",
+      telegramName: buildTelegramDisplayName(message.from),
+      lastInboundText: message.text.trim(),
+      lastOutboundText: reply.text,
+      lastIntent: reply.intent,
+      lastActivityAt: new Date().toISOString(),
+      status: reply.intent === "handoff" ? "handoff_requested" : "open"
+    });
+    return;
+  }
+
+  const contact = await getOrCreateIntercomContact(message.from);
+  const store = await readStore();
+  const existingMapping = store.byTelegramChatId[String(message.chat.id)];
+
+  let conversationId = existingMapping?.intercomConversationId;
+  if (conversationId) {
+    await replyToIntercomConversation(conversationId, contact.id, message.text.trim());
+  } else {
+    const createdMessage = await createIntercomConversation(contact.id, message.text.trim());
+    conversationId = extractConversationId(createdMessage);
+    if (!conversationId) {
+      throw new Error("Intercom did not return a conversation_id for the new conversation.");
+    }
+  }
+
+  await upsertMapping({
+    telegramChatId: String(message.chat.id),
+    telegramUserId: String(message.from.id),
+    telegramUsername: message.from.username || "",
+    telegramName: buildTelegramDisplayName(message.from),
+    intercomContactId: contact.id,
+    intercomConversationId: conversationId,
+    lastInboundText: message.text.trim(),
+    lastActivityAt: new Date().toISOString(),
+    status: "open"
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function buildAiReply(message, inGroup = false) {
+  const userText = message.text.trim();
+  const chatId = message.chat.id;
+  const userName = buildTelegramDisplayName(message.from);
+  const lang = detectLanguage("", message.text || "");
+  const knowledgeBase = await loadKnowledgeBase();
+
+  if (isStartCommand(userText)) {
+    clearConversationHistory(chatId);
+    const welcomeText = buildWelcomeMessage(knowledgeBase, lang);
+    if (!inGroup) {
+      await sendWithKeyboard(chatId, welcomeText, buildHomeKeyboard());
+    }
+    const reply = { intent: "welcome", text: welcomeText, skipSend: !inGroup };
+    await logConversation({ chatId, userName, userText, botReply: welcomeText, intent: "welcome", inGroup, lang });
+    return reply;
+  }
+
+  if (isChatIdCommand(userText)) {
+    return { intent: "chatid", text: `Your chat ID is: ${chatId}` };
+  }
+
+  if (shouldHandoff(userText)) {
+    console.log(`[handoff] triggered by: "${userText}"`);
+    if (inGroup) {
+      const reply = { intent: "handoff", text: buildGroupHandoffMessage(lang) };
+      await logConversation({ chatId, userName, userText, botReply: reply.text, intent: reply.intent, inGroup, lang });
+      return reply;
+    }
+    const handoffReply = { intent: "handoff", text: buildHandoffMessage(lang) };
+    await notifyAgents({ message, userText, intent: "user_requested" });
+    await logGap({ userText, intent: "handoff", hadPartialFaqMatch: false });
+    await logConversation({ chatId, userName, userText, botReply: handoffReply.text, intent: "handoff", inGroup, lang });
+    clearConversationHistory(chatId);
+    return handoffReply;
+  }
+
+  const matchedFaq = findBestFaqMatch(userText, knowledgeBase.faqs || []);
+  const aiReply = await generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq, lang, inGroup });
+
+  if (["handoff", "fallback"].includes(aiReply.intent)) {
+    if (!inGroup) {
+      await notifyAgents({ message, userText, intent: aiReply.intent });
+    }
+    // Always log gaps — group or private — so FAQ updater can learn from them
+    await logGap({ userText, intent: aiReply.intent, hadPartialFaqMatch: !!matchedFaq });
+    if (inGroup) {
+      const reply = { intent: "handoff", text: buildGroupHandoffMessage(lang) };
+      await logConversation({ chatId, userName, userText, botReply: reply.text, intent: reply.intent, inGroup, lang });
+      return reply;
+    }
+  }
+
+  // Log all messages except ignored ones in group chat (casual chat, off-topic)
+  // Group "ignore" messages are skipped — they're not support questions
+  if (aiReply.intent !== "ignore") {
+    await logConversation({
+      chatId, userName, userText,
+      botReply: aiReply.text,
+      intent: aiReply.intent,
+      faqMatched: matchedFaq?.id || null,
+      inGroup,
+      lang
+    });
+  }
+
+  appendConversationHistory(chatId, userText, aiReply.text, aiReply.intent);
+  return aiReply;
+}
+
+async function loadKnowledgeBase() {
+  await ensureKnowledgeBase();
+  const raw = await fs.readFile(env.knowledgeBaseFile, "utf8");
+  return JSON.parse(raw);
+}
+
+function isStartCommand(text) {
+  return ["/start", "start", "/help", "help"].includes(text.trim().toLowerCase());
+}
+
+function isChatIdCommand(text) {
+  return text.trim().toLowerCase() === "/chatid";
+}
+
+function buildWelcomeMessage(knowledgeBase, lang) {
+  const businessName = knowledgeBase.businessName || "Webot";
+  const exampleQuestions = (knowledgeBase.faqs || [])
+    .slice(0, 3)
+    .map((item) => `- ${item.question}`)
+    .join("\n");
+
+  if (lang === "en") {
+    return [
+      `Hi, welcome to ${businessName} AI Support.`,
+      "I can help you with questions like:",
+      exampleQuestions || "- What do you do?",
+      "",
+      "How can I help you today?"
+    ].join("\n");
+  }
+
+  return [
+    `你好，这里是 ${businessName} AI 客服。`,
+    "我可以帮你解答以下类型的问题，例如：",
+    exampleQuestions || "- 你们是做什么的？",
+    "",
+    "请问有什么我可以帮你的？"
+  ].join("\n");
+}
+
+function shouldHandoff(text) {
+  const normalized = text.trim().toLowerCase();
+  return env.handoffKeywords.some((keyword) => normalized.includes(String(keyword).toLowerCase()));
+}
+
+function detectLanguage(languageCode, messageText = "") {
+  // Detect from message content first — most reliable
+  if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(messageText)) return "zh";
+  return "en"; // default to English
+}
+
+function buildLanguageInstruction(lang) {
+  if (lang === "en") return "Respond in English.";
+  if (lang === "zh") return "Respond in Chinese (Simplified).";
+  return `Respond in the user's language (language code: ${lang}).`;
+}
+
+function buildGroupHandoffMessage(lang) {
+  const botLink = botUsername ? `@${botUsername}` : "our support bot";
+  if (lang === "en") {
+    return `To connect with a human agent, please click ${botLink} and send me a private message. Our support team will follow up with you there.`;
+  }
+  return `如需人工客服，请点击 ${botLink} 向我发起私聊，我们的客服人员会在私聊中为您跟进。`;
+}
+
+function buildHandoffMessage(lang) {
+  if (lang === "en") {
+    return "Your request has been passed to a human agent. We'll follow up as soon as possible. If it's urgent, please hold on — our team will reach out to you shortly.";
+  }
+  return "您的请求已转至人工客服，我们会尽快跟进。如需紧急协助，请稍候，客服人员将主动联系您。";
+}
+
+function findBestFaqMatch(userText, faqs) {
+  const normalized = normalizeForSearch(userText);
+  // Skip FAQ matching for very short or greeting-style inputs
+  if (normalized.length < 4) return null;
+  let bestMatch = null;
+
+  for (const faq of faqs) {
+    const terms = [faq.question, ...(faq.keywords || [])].map(normalizeForSearch);
+    let score = 0;
+
+    for (const term of terms) {
+      if (!term) {
+        continue;
+      }
+      if (normalized.includes(term) || term.includes(normalized)) {
+        score += Math.max(term.length, normalized.length);
+      } else if (hasAnyTokenOverlap(normalized, term)) {
+        score += 1;
+      }
+    }
+
+    if (!bestMatch || score > bestMatch.score) {
+      bestMatch = { ...faq, score };
+    }
+  }
+
+  if (!bestMatch || bestMatch.score <= 0) {
+    return null;
+  }
+
+  return bestMatch;
+}
+
+function normalizeForSearch(text) {
+  return String(text || "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function hasAnyTokenOverlap(left, right) {
+  const leftTokens = new Set(left.split(" ").filter(Boolean));
+  return right
+    .split(" ")
+    .filter(Boolean)
+    .some((token) => leftTokens.has(token));
+}
+
+// ---------------------------------------------------------------------------
+// Category detection — maps user message to relevant FAQ categories
+// ---------------------------------------------------------------------------
+
+const CATEGORY_SIGNALS = {
+  "account":       ["password", "login", "sign in", "sign up", "register", "2fa", "authenticator", "kyc", "verify", "verification", "identity", "account", "email", "密码", "登录", "注册", "认证", "实名"],
+  "deposits":      ["deposit", "fund", "top up", "add money", "ach", "wire", "debit card", "bank", "pending", "hold", "3ds", "3d secure", "充值", "入金", "转入", "银行", "待处理"],
+  "withdrawals":   ["withdraw", "withdrawal", "send", "transfer out", "cash out", "txid", "transaction", "提现", "出金", "转出", "提币", "取款"],
+  "trading-bots":  ["bot", "grid", "martingale", "dca", "twap", "rebalancing", "smart trade", "moon bot", "机器人", "网格", "定投", "再平衡"],
+  "crypto-assets": ["fee", "fees", "listed", "listing", "coin", "token", "network", "erc20", "trc20", "bep20", "solana", "手续费", "上架", "币种", "网络"],
+  "security":      ["scam", "fraud", "hack", "phishing", "stolen", "suspicious", "fake", "诈骗", "被骗", "欺诈"],
+  "platform":      ["webot", "pionex", "about", "what is", "upgrade", "rebrand", "migration", "平台", "介绍"]
+};
+
+const ALWAYS_INCLUDE = ["what-is-webot", "human-support"];
+
+function detectCategories(userText) {
+  const normalized = userText.toLowerCase();
+  const detected = new Set();
+  for (const [category, signals] of Object.entries(CATEGORY_SIGNALS)) {
+    if (signals.some((s) => normalized.includes(s))) {
+      detected.add(category);
+    }
+  }
+  return [...detected];
+}
+
+function selectFaqsForContext(userText, faqs) {
+  const detectedCategories = detectCategories(userText);
+  const result = [];
+  const seen = new Set();
+
+  // Always include pinned FAQs first
+  for (const faq of faqs) {
+    if (ALWAYS_INCLUDE.includes(faq.id)) {
+      result.push(faq);
+      seen.add(faq.id);
+    }
+  }
+
+  // Add FAQs from detected categories
+  if (detectedCategories.length > 0) {
+    for (const faq of faqs) {
+      if (!seen.has(faq.id) && detectedCategories.includes(faq.category)) {
+        result.push(faq);
+        seen.add(faq.id);
+      }
+    }
+  }
+
+  // If no category detected or still under 10, fill with remaining FAQs up to 20
+  const MAX = 20;
+  if (result.length < MAX) {
+    for (const faq of faqs) {
+      if (!seen.has(faq.id)) {
+        result.push(faq);
+        seen.add(faq.id);
+        if (result.length >= MAX) break;
+      }
+    }
+  }
+
+  return result;
+}
+
+async function generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq, lang, inGroup = false }) {
+  const matchedDocuments = await findRelevantDocuments(userText);
+  const selectedFaqs = selectFaqsForContext(userText, knowledgeBase.faqs || []);
+  const faqContext = selectedFaqs
+    .map((item) => `Q: ${item.question}\nA: ${item.answer}`)
+    .join("\n\n");
+  const documentContext = matchedDocuments
+    .map((item) => `Source: ${item.path}\n${item.excerpt}`)
+    .join("\n\n");
+
+  const languageInstruction = buildLanguageInstruction(lang);
+  const baseInstructions = env.aiSystemPrompt || knowledgeBase.systemPrompt ||
+    [
+      "You are a concise Telegram AI customer support agent.",
+      languageInstruction,
+      "Only answer based on the provided business summary and FAQ context.",
+      "If the answer is not supported by the provided context, say you need a human teammate to follow up.",
+      "Do not invent prices, policies, or guarantees.",
+      'Always respond with JSON: {"intent": "answer" or "handoff", "reply": "<your reply>"}.'
+    ].join(" ");
+
+  const groupInstruction = inGroup
+    ? "\nGROUP CHAT MODE: You are in a public support group. Only respond if the message is clearly a support question about Webot products or services. If the message is a greeting, casual chat, off-topic, or not a support question, set intent to 'ignore' and reply to empty string. Do not respond to every message."
+    : "";
+
+  const systemPrompt = [
+    baseInstructions,
+    groupInstruction,
+    `\nBusiness: ${knowledgeBase.businessName || "Unknown business"}`,
+    `Summary: ${knowledgeBase.summary || ""}`,
+    `Human handoff contact: ${knowledgeBase.handoffContact || "@support"}`,
+    matchedFaq ? `\nTop FAQ match:\nQ: ${matchedFaq.question}\nA: ${matchedFaq.answer}` : "",
+    faqContext ? `\nFAQ context:\n${faqContext}` : "",
+    documentContext ? `\nDocument context:\n${documentContext}` : ""
+  ].filter(Boolean).join("\n");
+
+  const history = getConversationHistory(chatId);
+  const messages = [...history, { role: "user", content: userText }];
+  const MAX_TURNS = 8;
+
+  try {
+    for (let turn = 0; turn < MAX_TURNS; turn++) {
+      console.log(`[ai] calling bedrock model=${env.aiModel} turn=${turn}`);
+      const response = await anthropicClient.messages.create({
+        model: env.aiModel,
+        max_tokens: 2048,
+        system: systemPrompt,
+        tools: TOOL_DEFINITIONS.filter((t) =>
+          !(t.name.startsWith("superset_") && !process.env.SUPERSET_BASE_URL)
+        ),
+        messages
+      });
+
+      messages.push({ role: "assistant", content: response.content });
+
+      if (response.stop_reason === "end_turn") {
+        const textBlock = response.content.find((b) => b.type === "text");
+        const raw = textBlock?.text || "{}";
+        // Find all JSON object candidates and use the last valid one
+        // (AI sometimes self-corrects by outputting a second JSON block)
+        const jsonCandidates = [...raw.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]);
+        let parsed = null;
+        for (const candidate of jsonCandidates) {
+          try { parsed = JSON.parse(candidate); } catch { /* skip */ }
+        }
+        if (!parsed) {
+          // Fallback: try full greedy match
+          const greedyMatch = raw.match(/\{[\s\S]*\}/);
+          try { parsed = JSON.parse(greedyMatch?.[0] || "{}"); } catch {
+            return { intent: "answer", text: raw.replace(/\{[\s\S]*\}/g, "").trim() || raw.trim() };
+          }
+        }
+        const replyText = String(parsed.reply || "").trim();
+        const intent = parsed.intent === "handoff" ? "handoff"
+          : parsed.intent === "ignore" ? "ignore"
+          : "answer";
+        if (intent === "ignore") return { intent: "ignore", text: "" };
+        if (!replyText) {
+          const fallback = lang === "zh"
+            ? "抱歉，我暂时无法回答这个问题。请换个方式提问，或联系人工客服 @pionexusTestSupportBot。"
+            : "Sorry, I wasn't able to generate a response for that. Please rephrase your question or contact @pionexusTestSupportBot for support.";
+          return { intent: "answer", text: fallback };
+        }
+        return {
+          intent,
+          faqId: matchedFaq?.id || null,
+          text: intent === "handoff" ? `${replyText}\n${buildHandoffMessage("en")}` : replyText
+        };
+      }
+
+      if (response.stop_reason === "tool_use") {
+        const toolUseBlocks = response.content.filter((b) => b.type === "tool_use");
+        console.log("Tool calls:", toolUseBlocks.map((b) => b.name).join(", "));
+        const toolResults = await Promise.all(toolUseBlocks.map(executeToolCall));
+        messages.push({ role: "user", content: toolResults });
+        continue;
+      }
+
+      break;
+    }
+
+    throw new Error("Agentic loop exceeded max turns.");
+  } catch (error) {
+    console.error("AI generation error", formatError(error));
+
+    if (matchedFaq) {
+      return { intent: "faq", text: matchedFaq.answer };
+    }
+
+    return { intent: "handoff", text: buildHandoffMessage("en") };
+  }
+}
+
+function parseCsv(value) {
+  if (!value) {
+    return null;
+  }
+  return value
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+async function findRelevantDocuments(userText) {
+  const allPaths = await collectDocumentPaths();
+  if (!allPaths.length) return [];
+
+  const docs = [];
+  for (const filePath of allPaths) {
+    const loaded = await loadDocument(filePath);
+    if (!loaded) continue;
+    const score = scoreDocument(userText, loaded.text);
+    if (score <= 0) continue;
+    docs.push({
+      path: path.relative(projectRoot, filePath),
+      score,
+      excerpt: buildExcerpt(userText, loaded.text)
+    });
+  }
+
+  return docs.sort((a, b) => b.score - a.score).slice(0, 5);
+}
+
+async function collectDocumentPaths() {
+  const paths = new Set();
+
+  // Auto-scan KNOWLEDGE_DOCS_DIR
+  try {
+    const entries = await fs.readdir(env.knowledgeDocsDir, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isFile()) continue;
+      const ext = path.extname(entry.name).toLowerCase();
+      if ([".txt", ".md", ".json", ".csv"].includes(ext)) {
+        paths.add(path.join(env.knowledgeDocsDir, entry.name));
+      }
+    }
+  } catch {
+    // dir doesn't exist yet — no-op
+  }
+
+  // Also include any explicit DOCUMENT_PATHS
+  for (const rawPath of env.documentPaths.slice(0, 20)) {
+    paths.add(resolveProjectPath(rawPath));
+  }
+
+  return [...paths];
+}
+
+async function loadDocument(filePath) {
+  try {
+    const stat = await fs.stat(filePath);
+    if (!stat.isFile()) {
+      return null;
+    }
+
+    const extension = path.extname(filePath).toLowerCase();
+    if (![".txt", ".md", ".json", ".csv"].includes(extension)) {
+      return null;
+    }
+
+    const text = await fs.readFile(filePath, "utf8");
+    return {
+      path: filePath,
+      text: text.slice(0, 20000)
+    };
+  } catch {
+    return null;
+  }
+}
+
+function scoreDocument(userText, documentText) {
+  const normalizedQuestion = normalizeForSearch(userText);
+  const normalizedDocument = normalizeForSearch(documentText).slice(0, 20000);
+  let score = 0;
+
+  if (normalizedDocument.includes(normalizedQuestion) && normalizedQuestion) {
+    score += normalizedQuestion.length + 5;
+  }
+
+  const tokens = normalizedQuestion.split(" ").filter(Boolean);
+  for (const token of tokens) {
+    if (token.length < 2) {
+      continue;
+    }
+    if (normalizedDocument.includes(token)) {
+      score += 1;
+    }
+  }
+
+  return score;
+}
+
+function buildExcerpt(userText, documentText) {
+  const normalizedQuestion = normalizeForSearch(userText);
+  const raw = String(documentText || "").replace(/\s+/g, " ").trim();
+  if (!raw) {
+    return "";
+  }
+
+  const lowerRaw = raw.toLowerCase();
+  const index = normalizedQuestion ? lowerRaw.indexOf(normalizedQuestion) : -1;
+  if (index >= 0) {
+    return raw.slice(Math.max(0, index - 300), index + 900);
+  }
+
+  return raw.slice(0, 1200);
+}
+
+function formatError(error) {
+  return {
+    message: error.message,
+    status: error.response?.status || error.status || 500,
+    data: error.response?.data || null
+  };
+}

@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Webot AI Telegram Support Bot — Build Workflow</title>
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; max-width: 860px; margin: 40px auto; padding: 0 24px; color: #1a1a1a; line-height: 1.6; }
+    h1 { font-size: 1.6rem; border-bottom: 2px solid #0066cc; padding-bottom: 10px; }
+    h2 { font-size: 1.1rem; background: #0066cc; color: white; padding: 8px 14px; border-radius: 6px; margin-top: 32px; }
+    h3 { font-size: 0.95rem; color: #0066cc; margin-bottom: 4px; }
+    ul { margin: 6px 0 12px 0; padding-left: 20px; }
+    li { margin: 4px 0; }
+    pre { background: #f4f4f4; border: 1px solid #ddd; border-radius: 6px; padding: 16px; font-size: 0.82rem; overflow-x: auto; line-height: 1.5; }
+    .step { background: #f9f9f9; border-left: 4px solid #0066cc; padding: 12px 16px; margin: 12px 0; border-radius: 0 6px 6px 0; }
+    .tag { display: inline-block; background: #e8f0fe; color: #0066cc; font-size: 0.75rem; padding: 2px 8px; border-radius: 12px; margin-right: 4px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 0.9rem; }
+    th { background: #0066cc; color: white; padding: 8px 12px; text-align: left; }
+    td { padding: 8px 12px; border-bottom: 1px solid #eee; }
+    tr:nth-child(even) td { background: #f9f9f9; }
+  </style>
+</head>
+<body>
+
+<h1>Webot AI Telegram Support Bot — Build Workflow</h1>
+
+<!-- STEP 1 -->
+<h2>Step 1: Understand the Requirements</h2>
+<div class="step">
+  <ul>
+    <li>Goal: AI customer support bot on Telegram for Webot (formerly Pionex.US)</li>
+    <li>Users chat with the bot → AI answers from knowledge base</li>
+    <li>If AI can't answer → escalate to human agent</li>
+    <li>Agent receives ticket via a separate agent bot and can reply back to user</li>
+  </ul>
+</div>
+
+<!-- STEP 2 -->
+<h2>Step 2: Choose the Tech Stack</h2>
+<table>
+  <tr><th>Component</th><th>Technology</th><th>Reason</th></tr>
+  <tr><td>Server</td><td>Node.js + Express</td><td>Lightweight, handles webhooks and polling</td></tr>
+  <tr><td>Messaging</td><td>Telegram Bot API</td><td>Two bots: customer bot + agent bot</td></tr>
+  <tr><td>AI Model</td><td>AWS Bedrock (Claude Haiku)</td><td>Fast, cost-effective, multilingual</td></tr>
+  <tr><td>Storage</td><td>JSON files</td><td>No database needed for demo stage</td></tr>
+</table>
+
+<!-- STEP 3 -->
+<h2>Step 3: Build the Telegram Layer</h2>
+<div class="step">
+  <ul>
+    <li>Set up Express server with <code>/webhooks/telegram</code> endpoint</li>
+    <li>Support both <strong>polling mode</strong> (local dev) and <strong>webhook mode</strong> (production)</li>
+    <li>Parse incoming messages and route to the correct handler</li>
+    <li>Two bots polling independently: customer bot + agent bot</li>
+  </ul>
+</div>
+
+<!-- STEP 4 -->
+<h2>Step 4: Build the Knowledge Base</h2>
+<div class="step">
+  <h3>Files</h3>
+  <ul>
+    <li><code>data/knowledge-base.json</code> — business summary, FAQ list, handoff contact</li>
+    <li><code>data/docs/</code> — additional product documents (.md, .txt, .csv)</li>
+  </ul>
+  <h3>How it works</h3>
+  <ul>
+    <li>FAQ keyword matching runs <em>before</em> calling AI (faster and cheaper)</li>
+    <li>Relevant documents are scored and passed as context to the AI</li>
+    <li>Unanswered questions are logged to <code>data/gap-log.jsonl</code> for review</li>
+  </ul>
+</div>
+
+<!-- STEP 5 -->
+<h2>Step 5: Build the AI Response Engine</h2>
+<div class="step">
+  <ul>
+    <li>Connect to AWS Bedrock (Claude Haiku model)</li>
+    <li>Build system prompt from: knowledge base + FAQ context + matched documents</li>
+    <li>Detect user's language from <code>message.from.language_code</code> → respond in Chinese or English</li>
+    <li>Multi-turn conversation history per user (in-memory, expires after inactivity)</li>
+    <li>AI returns structured JSON: <code>{"intent": "answer"|"handoff", "reply": "..."}</code></li>
+  </ul>
+</div>
+
+<!-- STEP 6 -->
+<h2>Step 6: Build the Handoff System</h2>
+<div class="step">
+  <h3>Triggers</h3>
+  <ul>
+    <li><strong>Keyword trigger</strong> — "人工", "human", "urgent" etc. → instant handoff, no AI call</li>
+    <li><strong>AI-triggered</strong> — AI returns <code>intent: "handoff"</code> when it can't answer</li>
+  </ul>
+  <h3>Session management</h3>
+  <ul>
+    <li>In-memory <code>handoffSessions</code> map tracks active user↔agent connections</li>
+    <li>Each session gets a 4-character ref (e.g. <code>#EAVO</code>)</li>
+    <li>Agent bot sends ticket notification with conversation history + available commands</li>
+  </ul>
+</div>
+
+<!-- STEP 7 -->
+<h2>Step 7: Build the Agent Relay</h2>
+<div class="step">
+  <h3>Agent bot commands</h3>
+  <table>
+    <tr><th>Command</th><th>Action</th></tr>
+    <tr><td><code>REPLY &lt;message&gt;</code></td><td>Reply to the only active session</td></tr>
+    <tr><td><code>REPLY #REF &lt;message&gt;</code></td><td>Reply to a specific session by ref</td></tr>
+    <tr><td><code>RESOLVE</code></td><td>Close the active session</td></tr>
+    <tr><td><code>SESSIONS</code></td><td>List all active sessions</td></tr>
+  </table>
+  <h3>Two-way relay</h3>
+  <ul>
+    <li>User messages during handoff → forwarded to agent via agent bot</li>
+    <li>Agent REPLY → forwarded to user via customer bot</li>
+    <li>Only chat IDs in <code>AGENT_CHAT_IDS</code> can use agent bot commands (security)</li>
+  </ul>
+</div>
+
+<!-- STEP 8 -->
+<h2>Step 8: Bug Fixes &amp; Hardening</h2>
+<div class="step">
+  <ul>
+    <li>Fixed notification sent via wrong bot (<code>telegramClient</code> → <code>agentBotClient</code>)</li>
+    <li>Added <code>isAgentChat()</code> check on agent bot polling — blocks unauthorized accounts</li>
+    <li>Language detection from <code>message.from.language_code</code> for Chinese/English responses</li>
+    <li>Gap logging — unanswered questions saved to <code>data/gap-log.jsonl</code></li>
+  </ul>
+</div>
+
+<!-- STEP 9 -->
+<h2>Step 9: Data Flow</h2>
+<pre>
+User
+ │  sends message
+ ▼
+Customer Bot (Telegram polling)
+ │
+ ├─ keyword handoff? ──► notifyAgents() ──► Agent Bot ──► Agent
+ │                            │
+ │                       session created
+ │
+ ├─ active session? ──► forwardUserMessageToAgent() ──► Agent Bot ──► Agent
+ │
+ └─ AI mode ──► Claude (Bedrock) ──► reply to user
+                    │
+                    └─ AI says handoff? ──► notifyAgents()
+
+Agent
+ │  sends: REPLY #REF &lt;message&gt;
+ ▼
+Agent Bot (polling)
+ │  isAgentChat() check ── unauthorized? → ignore
+ ▼
+handleAgentCommand()
+ │
+ └─ sendTelegramMessage() ──► Customer Bot ──► User
+</pre>
+
+<!-- STEP 10 -->
+<h2>Step 10: Deployment</h2>
+<div class="step">
+  <h3>Local (development)</h3>
+  <ul>
+    <li>Set <code>TELEGRAM_MODE=polling</code> — no public URL needed</li>
+    <li>Run: <code>npm start</code> or <code>node src/index.js</code></li>
+    <li>Only one instance at a time — two instances cause 409 polling conflict</li>
+  </ul>
+  <h3>Production (recommended options)</h3>
+  <ul>
+    <li><strong>Railway</strong> — easiest, connect GitHub repo, set env vars in dashboard</li>
+    <li><strong>AWS Lightsail</strong> — $5/month VPS, use <code>pm2</code> to manage process</li>
+    <li><strong>Render</strong> — free tier available, good for low traffic</li>
+  </ul>
+  <h3>Production process manager</h3>
+  <pre>npm install -g pm2
+pm2 start src/index.js --name webot
+pm2 startup &amp;&amp; pm2 save</pre>
+</div>
+
+<!-- CHECKLIST -->
+<h2>Build Checklist</h2>
+<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+  <span id="checklist-progress" style="font-size:0.9rem; color:#555;"></span>
+  <button onclick="resetChecklist()" style="font-size:0.8rem; padding:4px 12px; border:1px solid #ccc; border-radius:4px; cursor:pointer; background:white;">Reset</button>
+</div>
+<table id="checklist-table">
+  <tr><th>Phase</th><th>Task</th><th style="width:40px; text-align:center;">Done</th></tr>
+  <tr><td>1. Infrastructure</td><td>Create customer bot + agent bot via BotFather</td><td></td></tr>
+  <tr><td>1. Infrastructure</td><td>Fill in .env — bot tokens, AWS credentials, AGENT_CHAT_IDS</td><td></td></tr>
+  <tr><td>1. Infrastructure</td><td>npm install + npm start — verify /start works</td><td></td></tr>
+  <tr><td>2. Knowledge Base</td><td>Update knowledge-base.json — business name, summary, handoff contact</td><td></td></tr>
+  <tr><td>2. Knowledge Base</td><td>Add 20–30 real FAQ entries</td><td></td></tr>
+  <tr><td>2. Knowledge Base</td><td>Add product docs to data/docs/</td><td></td></tr>
+  <tr><td>2. Knowledge Base</td><td>Update HANDOFF_KEYWORDS in .env</td><td></td></tr>
+  <tr><td>3. AI Tuning</td><td>Write AI_SYSTEM_PROMPT — tone, language, boundaries</td><td></td></tr>
+  <tr><td>3. AI Tuning</td><td>Verify AI stays within knowledge base</td><td></td></tr>
+  <tr><td>4. Testing</td><td>Test top 10 FAQs</td><td></td></tr>
+  <tr><td>4. Testing</td><td>Test handoff trigger → agent bot receives ticket</td><td></td></tr>
+  <tr><td>4. Testing</td><td>Test REPLY command → user receives message</td><td></td></tr>
+  <tr><td>4. Testing</td><td>Test RESOLVE + SESSIONS commands</td><td></td></tr>
+  <tr><td>4. Testing</td><td>Test multi-turn conversation</td><td></td></tr>
+  <tr><td>5. Deployment</td><td>Deploy to server (Railway / AWS Lightsail)</td><td></td></tr>
+  <tr><td>5. Deployment</td><td>Run with pm2 for auto-restart</td><td></td></tr>
+  <tr><td>6. Maintenance</td><td>Review gap-log.jsonl weekly, fill knowledge base gaps</td><td></td></tr>
+</table>
+
+<script>
+  const STORAGE_KEY = 'webot-checklist';
+
+  function getRows() {
+    return document.querySelectorAll('#checklist-table tr:not(:first-child)');
+  }
+
+  function updateProgress() {
+    const rows = getRows();
+    const done = [...rows].filter(r => r.classList.contains('done')).length;
+    document.getElementById('checklist-progress').textContent = `${done} / ${rows.length} completed`;
+  }
+
+  function saveState() {
+    const state = [...getRows()].map(r => r.classList.contains('done'));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    updateProgress();
+  }
+
+  function loadState() {
+    const state = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+    getRows().forEach((row, i) => {
+      if (state[i]) row.classList.add('done');
+      const td = row.querySelector('td:last-child');
+      td.innerHTML = `<input type="checkbox" ${state[i] ? 'checked' : ''} onchange="toggle(this)">`;
+    });
+    updateProgress();
+  }
+
+  function toggle(checkbox) {
+    const row = checkbox.closest('tr');
+    row.classList.toggle('done', checkbox.checked);
+    saveState();
+  }
+
+  function resetChecklist() {
+    if (!confirm('Reset all checkboxes?')) return;
+    localStorage.removeItem(STORAGE_KEY);
+    getRows().forEach(row => {
+      row.classList.remove('done');
+      row.querySelector('input[type=checkbox]').checked = false;
+    });
+    updateProgress();
+  }
+
+  loadState();
+</script>
+
+<style>
+  #checklist-table tr.done td { text-decoration: line-through; color: #999; }
+  #checklist-table tr.done td:last-child { text-decoration: none; }
+  #checklist-table input[type=checkbox] { width: 18px; height: 18px; cursor: pointer; accent-color: #0066cc; }
+</style>
+
+</body>
+</html>

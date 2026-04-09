@@ -1,0 +1,931 @@
+{
+  "businessName": "Webot (formerly Pionex.US)",
+  "summary": "Webot (formerly Pionex.US) is a cryptocurrency trading platform offering automated trading bots, spot trading, and related services for US users.",
+  "handoffContact": "@pionexusTestSupportBot",
+  "systemPrompt": "You are a customer support agent for Webot (formerly Pionex.US), a cryptocurrency trading platform. Your role is to help users resolve their questions accurately and in a timely manner.\n\nLANGUAGE: Always respond in the language specified in the language instruction. Never ask the user which language they prefer.\n\nTONE: Be warm, empathetic, and genuinely helpful — like a knowledgeable friend, not a robot. Follow these tone guidelines:\n- Acknowledge the user's situation before jumping into the answer. If they sound frustrated or worried, briefly validate that first (e.g. \"That's completely understandable\" or \"Happy to help with that!\").\n- Never give a one-word answer. Even a simple yes/no should include a brief explanation or next step.\n- End responses with an offer to help further when appropriate (e.g. \"Let me know if you have any other questions!\").\n- Be concise — do not over-explain — but never be cold or dismissive.\n- Avoid copy-paste sounding responses. Make each reply feel personal and direct.\n\nSCOPE: Only answer questions related to Webot products and services. If a user asks about unrelated topics, politely explain that you can only assist with Webot-related questions.\n\nIMPORTANT: Webot and Pionex are two completely separate, independently operated companies. If a user asks about Pionex (the global exchange at pionex.com), clarify that Webot is not affiliated with Pionex and direct them to pionex.com. Never answer questions about Pionex accounts, Pionex trades, or Pionex services.\n\nHARD RULES — never violate these under any circumstance:\n- Never give financial or investment advice. Do not say things like 'you should buy X' or 'this strategy will profit'.\n- Never guarantee returns or profits from any trading bot or strategy.\n- Never comment on tax implications — always direct users to a qualified tax professional.\n- Never make claims about FDIC or SIPC insurance coverage.\n- Never comment on regulatory, legal, or compliance matters affecting the company.\n- Never ask for or accept passwords, private keys, seed phrases, or 2FA codes.\n- Never send external links to users.\n- Never claim the ability to override 2FA or security locks.\n- Never discuss another user's account information.\n- For crypto deposit/withdrawal fees, you may quote the fees from the knowledge base. For all other fees, direct users to the official fee page in the Webot app.\n- When a user asks if a specific coin or trading pair is listed on Webot (e.g. \"is BTC listed?\", \"is $ETH available?\"), ALWAYS call the webot_check_pair tool. Never answer from FAQ context for this — always call the tool.\n- When a user asks for a full list of available pairs or coins, use the webot_list_all_pairs tool.\n- Never promise specific deposit or withdrawal timelines.\n- Never promise transaction reversals — crypto transactions are generally irreversible.\n- Never confirm account balances or trade history without verified user identity.\n- Never guarantee specific bot performance — market conditions vary.\n- Never make unsupported comparisons to competitor platforms.\n- Never promise specific resolution timelines.\n- Never escalate to personal staff contacts — only refer users to @siaauu for human support.\n- Never make promises about compensation or refunds.\n\nHANDOFF: If a question is beyond your knowledge, involves account security, requires account-specific actions, or the user explicitly requests a human, set intent to 'handoff' and reply with exactly: 'I'm not sure about that. Please reach out to our support team directly at @pionexusTestSupportBot and they'll be happy to help.'\n\nGREETINGS: If the user sends a simple greeting (hi, hello, hey, etc.), respond warmly and invite them to ask a question. Never handoff for a greeting.\n\nRESPONSE FORMAT: Output a single JSON object only. No extra text, no explanation, no retry. Format:\n{\"intent\": \"answer\" or \"handoff\", \"reply\": \"<your response>\"}\n\nFORMATTING: Do not use markdown formatting (no **bold**, no *italic*, no headers). Use plain text only. Use line breaks and dashes for structure if needed.",
+  "faqs": [
+    {
+      "id": "what-is-webot",
+      "question": "What is Webot?",
+      "answer": "Webot (formerly Pionex.US) is a US-based cryptocurrency trading platform offering automated trading bots, spot trading, and portfolio management tools for US users.\n\nImportant: Webot and Pionex are two separate companies operating independently. If your question is about Pionex (the global exchange), please visit pionex.com directly — we are not affiliated and cannot assist with Pionex account or service inquiries.",
+      "keywords": [
+        "webot",
+        "what is webot",
+        "介绍",
+        "做什么",
+        "是什么",
+        "platform",
+        "about webot"
+      ],
+      "category": "platform"
+    },
+    {
+      "id": "pionex-vs-webot",
+      "question": "What is the difference between Pionex and Webot?",
+      "answer": "Pionex and Webot are two separate, independently operated companies.\n\n- Webot (formerly Pionex.US) is a US-based exchange serving US users. This is our platform.\n- Pionex is a global cryptocurrency exchange operating separately at pionex.com.\n\nWe have no affiliation with Pionex and cannot assist with Pionex account issues, trades, deposits, or any other Pionex service. For Pionex-related questions, please contact them directly at pionex.com.",
+      "keywords": [
+        "pionex",
+        "what is pionex",
+        "pionex vs webot",
+        "pionex global",
+        "pionex.com",
+        "difference between pionex and webot",
+        "是否和pionex一样",
+        "pionex账号",
+        "pionex support",
+        "pioneer exchange"
+      ],
+      "category": "platform"
+    },
+    {
+      "id": "how-to-start",
+      "question": "How do I get started?",
+      "answer": "You can download the Webot app or visit our website to create an account. After registering, complete KYC verification to unlock full trading and withdrawal features.",
+      "keywords": [
+        "start",
+        "begin",
+        "register",
+        "sign up",
+        "开始",
+        "注册",
+        "download"
+      ],
+      "category": "account"
+    },
+    {
+      "id": "kyc",
+      "question": "How do I complete KYC verification?",
+      "answer": "Go to your account settings and select Identity Verification. You will need to provide a government-issued ID and a selfie. KYC review typically takes some time — we are unable to guarantee a specific timeline.",
+      "keywords": [
+        "kyc",
+        "verify",
+        "verification",
+        "identity",
+        "实名",
+        "认证",
+        "审核"
+      ],
+      "category": "account"
+    },
+    {
+      "id": "deposit",
+      "question": "How do I deposit funds?",
+      "answer": "Webot supports the following USD deposit methods:\n\n1. Bank Account (ACH)\n- Fee: $0\n- Speed: 0–4 business days\n- Holding time: 14 days after deposit is credited\n\n2. Debit Card\n- Fee: $0.30 + 2.9% per transaction\n- Speed: Instant\n- Holding time: 10 days after deposit is credited\n\n3. Wire Transfer\n- Fee: $20.00\n- Speed: 1–5 business days\n- Holding time: 24 hours after deposit is credited\n\nHow to deposit:\n- App: Log in → Tap Deposit → Choose Bank Account, Debit Card, Wire Transfer, or Receive from exchange/wallet → Follow the steps.\n- Web: Log in → Wallet → Choose Deposit USD or Receive Crypto → Follow the guidelines.",
+      "keywords": [
+        "deposit",
+        "recharge",
+        "fund",
+        "充值",
+        "入金",
+        "转入",
+        "ach",
+        "bank account",
+        "debit card",
+        "wire transfer",
+        "deposit limit",
+        "deposit fee",
+        "how to deposit",
+        "usd deposit",
+        "银行",
+        "入账",
+        "手续费",
+        "限额"
+      ],
+      "category": "deposits"
+    },
+    {
+      "id": "withdrawal",
+      "question": "How do I withdraw funds?",
+      "answer": "Webot supports the following USD withdrawal methods:\n\n1. Bank Account (ACH)\n- Fee: $12.00\n- Speed: 3–5 business days\n\n2. Wire Transfer\n- Fee: $20.00\n- Speed: 3–7 business days\n\n3. Send to Exchange / Wallet\n- Follow the on-screen steps to send crypto to an external address.\n\nHow to withdraw:\n- App: Log in → Tap the 3 dots icon on the right of Deposit → Select Withdrawal → Choose Bank Account, Wire Transfer, or Send to Exchange/Wallet → Follow the steps.\n- Web: Log in → Wallet → Choose Withdrawal USD or Withdrawal Crypto → Follow the guidelines.",
+      "keywords": [
+        "withdraw",
+        "withdrawal",
+        "提现",
+        "出金",
+        "转出",
+        "bank account",
+        "wire transfer",
+        "send to wallet",
+        "withdrawal fee",
+        "how to withdraw",
+        "取款",
+        "手续费",
+        "提款"
+      ],
+      "category": "withdrawals"
+    },
+    {
+      "id": "trading-bots",
+      "question": "What trading bots are available?",
+      "answer": "Webot offers the following trading bots:\n1. Grid Trading Bot – buy low, sell high within a price range. Best for sideways markets.\n2. Reverse Grid Bot – accumulates base currency by selling high and buying back lower. Best for bear markets.\n3. Martingale (DCA) Bot – ladder-buys on dips, sells all at once on rebound. Reduces average holding cost.\n4. Rebalancing Bot – maintains a balanced portfolio ratio across multiple coins.\n5. Smart Trade Bot – one-time trade with take-profit and stop-loss settings. Best for trending markets.\n6. BTC & ETH Moon Bot – pre-configured grid strategy for BTC or ETH.\n7. TWAP Bot – splits large orders over time to reduce market impact.\n\nPast performance does not guarantee future results.",
+      "keywords": [
+        "what bots",
+        "which bot",
+        "list of bots",
+        "available bots",
+        "what trading bots",
+        "有哪些机器人",
+        "有什么机器人",
+        "all bots",
+        "bots available"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "grid-trading-bot",
+      "question": "How does the Grid Trading Bot work?",
+      "answer": "The Grid Trading Bot automatically buys low and sells high within a set price range, generating grid profits from market fluctuations. It runs 24/7.\n\nKey parameters:\n- Upper/Lower limit: The price range the bot operates in. Bot pauses if price goes outside this range.\n- Number of grids: More grids = more frequent trades but smaller profit per trade.\n- Investment: Minimum investment is calculated based on your range and grid count.\n- Grid mode: Arithmetic (equal intervals) or Geometric (proportional intervals).\n\nAdvanced: Trigger price, stop loss, take profit, slippage control, trailing up.\n\nBest for: Sideways or volatile markets. Use AI Strategy if you're unsure of parameters.\n\nHow to create (App): Bot → Create → Grid Trading Bot → Choose pair → Set parameters or use AI Strategy → Create → OK.\nHow to create (Web): Trade → Trading Bot → Bot → All → Grid Trading Bot → Choose pair → Set parameters → Create Bot → Continue.",
+      "keywords": [
+        "grid",
+        "grid bot",
+        "grid trading",
+        "网格",
+        "网格机器人",
+        "sideways market",
+        "grid profit",
+        "price range",
+        "how to create grid bot"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "reverse-grid-bot",
+      "question": "How does the Reverse Grid Bot work?",
+      "answer": "The Reverse Grid Bot accumulates base currency (e.g. ETH) by selling at high prices and buying back at lower prices. Unlike the regular Grid Bot which measures profit in quote currency (USDT), the Reverse Grid measures profit in base currency (ETH).\n\nBest for: Bear markets or when you want to grow your coin holdings.\n\nKey parameters:\n- Upper/Lower limit: Operating price range.\n- Grids: Number of price levels.\n- Investment: Amount of base currency (tokens) to invest.\n- Stop loss: Triggered when price rises (converts USDT back to base currency).\n- Take profit: Triggered when price falls enough (converts USDT back to base currency).\n\nNote: After stop loss or take profit, the bot converts all USDT back to base currency.\n\nHow to create (App): Bot → Create → Reverse Grid Bot → Choose pair → Set parameters → Create → OK.\nHow to create (Web): Trade → Trading Bot → Bot → All → Reverse Grid Bot → Choose pair → Set parameters → Create Bot → Continue.",
+      "keywords": [
+        "reverse grid",
+        "reverse grid bot",
+        "反向网格",
+        "base currency",
+        "accumulate coins",
+        "bear market",
+        "ETH accumulate",
+        "coin accumulation"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "martingale-dca-bot",
+      "question": "How does the Martingale (DCA) Bot work?",
+      "answer": "The Martingale Bot ladder-buys on price dips and sells everything at once when the price rebounds to your take-profit level. It uses increasing order sizes (1x, 2x, 4x, 8x...) to reduce average holding cost.\n\nBest for: Coins with good long-term fundamentals. Best started at a non-high price.\n\nKey parameters:\n- Price scale: The % drop that triggers each additional buy.\n- Take profit ratio: The % rebound at which the bot sells all coins.\n- Investment: Total amount to invest.\n- Safety orders: Number of dip-buying levels.\n- Volume scale: Multiplier for each successive buy order.\n\nThe bot automatically reinvests profits into the next round (auto-compounding).\n\nMartingale vs Grid: Martingale has lower risk and higher arbitrage profit in volatile markets; Grid has higher trend profit when market rises steadily.\n\nHow to create (App): Bot → Create → Martingale Bot → Standard Mode → Choose pair → AI Strategy or set manually → Create → Confirm.\nHow to create (Web): Trade → Trading Bot → Bot → All → Martingale Bot → Choose pair → Use AI Strategy → Create → OK.",
+      "keywords": [
+        "martingale",
+        "dca",
+        "dca bot",
+        "dollar cost average",
+        "定投",
+        "马丁格尔",
+        "ladder buy",
+        "buy the dip",
+        "dip buying",
+        "martingale bot",
+        "safety orders"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "rebalancing-bot",
+      "question": "How does the Rebalancing Bot (屯币宝) work?",
+      "answer": "The Rebalancing Bot maintains a target allocation ratio across multiple coins by automatically buying and selling when prices shift. For example, a 1:1 BTC/ETH portfolio will be rebalanced whenever one coin outperforms the other.\n\nModes:\n- Dual-coin: Balances 2 coins at a 1:1 ratio.\n- Multi-coin: Balances up to 10 coins with custom ratios.\n\nRebalancing methods:\n- Periodic: Rebalances at set time intervals (e.g. every 4 or 24 hours).\n- Threshold: Rebalances when any coin deviates beyond a set % from target.\n\nMinimum investment: 10 USDT per coin (e.g. 2 coins = 20 USDT minimum).\nTrading fee: 0.1% per rebalance transaction.\n\nHow to create (App): Bot → Create → Rebalancing Bot → Choose mode and coins → Enter investment → Create → Confirm.\nHow to create (Web): Trade → Trading Bot → Bot → All → Rebalancing Bot → Choose coins → Set parameters → Create → OK.",
+      "keywords": [
+        "rebalancing",
+        "rebalance bot",
+        "portfolio balance",
+        "再平衡",
+        "屯币宝",
+        "dual coin",
+        "multi coin",
+        "portfolio management",
+        "rebalancing bot"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "smart-trade-bot",
+      "question": "How does the Smart Trade Bot work?",
+      "answer": "Smart Trade lets you schedule a buy with automatic take-profit and stop-loss, running 24/7 without manual monitoring.\n\nModes:\n- Limit (Standard): Set a specific buy price, take-profit price, and stop-loss price.\n- Market (Speed): Use when you want to chase an uptrend immediately. Set investment amount and trailing percentage only.\n\nTake-profit options:\n- Fixed-Price: Sells when price reaches your set target.\n- Trailing Take-Profit: Activates at a trigger price, then sells when price drops from its peak by the trailing %.\n\nStop-loss: Set the price at which the bot closes. Set to 0 to disable.\n\nBest for: Trending or volatile markets when you want to capture a move with defined risk.\n\nHow to create (App): Bot → Create → Smart Trade → Choose pair → Select mode → Set buy price, take profit, stop loss → Create.\nHow to create (Web): Trade → Trading Bot → Bot → All → Smart Trade → Choose pair → Set parameters → Create.",
+      "keywords": [
+        "smart trade",
+        "take profit",
+        "stop loss",
+        "trailing take profit",
+        "智能交易",
+        "止盈",
+        "止损",
+        "smart trade bot",
+        "trailing stop",
+        "limit order bot"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "btc-eth-moon-bot",
+      "question": "How does the BTC & ETH Moon Bot (BTC天地单 / ETH天地单) work?",
+      "answer": "BTC/ETH Moon Bot is a pre-configured grid trading strategy for BTC or ETH. Parameters are automatically set based on current market prices — no manual configuration needed.\n\nIt runs 24/7, capturing grid profits from price fluctuations. Grid profits can be withdrawn at any time.\n\nTotal profit = Grid profit + Unrealized profit (trend gains from price increase).\n\nHow to create (App): Bot → Create → Strategy → Select BTC Moon or ETH Moon → Choose USD or USDT → Enter investment → Continue.\nHow to create (Web): Trade → Trading Bot → Strategy → Select BTC Moon or ETH Moon → Choose USD or USDT → Enter investment → Create.\n\nNote: Investment amount cannot be changed after the bot is created. Parameters cannot be modified while running.",
+      "keywords": [
+        "moon bot",
+        "btc moon",
+        "eth moon",
+        "bitcoin bot",
+        "ethereum bot",
+        "BTC机器人",
+        "ETH机器人",
+        "moon strategy",
+        "btc eth moon",
+        "BTC天地单",
+        "ETH天地单",
+        "天地单"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "twap-bot",
+      "question": "How does the TWAP Bot (定投机器人) work?",
+      "answer": "TWAP (Time-Weighted Average Price) splits a large order into smaller equal-sized orders executed at regular time intervals. This reduces market impact and achieves a better average price.\n\nParameters:\n- Order period: 10 sec, 30 sec, 1 min, or 5 min.\n- Buy/Sell amount per order: Amount to trade each interval.\n- Total transactions: Number of times to repeat.\n\nExample: Buy 1,000 USDT of ETH every 10 seconds, 100 times = 100,000 USDT total.\n\nHow to use (Web): Trade → Trading Bot → TWAP → Select pair → Set order period, amount per order, and number of transactions → Start.",
+      "keywords": [
+        "twap",
+        "time weighted",
+        "average price",
+        "large order",
+        "split order",
+        "twap bot",
+        "algorithmic trading",
+        "时间加权",
+        "定投机器人",
+        "定投"
+      ],
+      "category": "trading-bots"
+    },
+    {
+      "id": "crypto-fees",
+      "question": "What are the crypto deposit and withdrawal fees?",
+      "answer": "Here are the crypto deposit and withdrawal fees on Webot:\n\n```\nCoin           Dep Min    Wdr Min    Wdr Fee\n─────────────────────────────────────────────\nSTABLECOINS\nUSDT ERC20     1          5          1.016\nUSDT TRC20     1          2          1\nUSDT BEP20     0.01       1          0.2\nUSDC ERC20     1          5          0.7749\nUSDC Solana    0.1        3          1.5\nUSDC BASE      0.2        2          0.15\n\nMAJOR COINS\nBTC            0.00001    0.0002     0.00002\nETH ERC20      0.001      0.02       0.0002\nETH BASE       0.0001     0.0048     0.00003\nSOL            0.01       0.01       0.01\nXRP            0.1        1.2        0.2\nBNB BEP20      0.0001     0.002      0.0002\nLTC            0.001      0.0012     0.0001\nBCH            0.0004     0.00096    0.0002\nDOGE           10         20         4\n\nDEFI & LAYER 2\nLINK ERC20     0.1        0.3        0.57\nUNI ERC20      0.2        0.6        0.83\nENS ERC20      0.15       0.2        0.38\nOP Optimism    0.18       0.3        0.015\nPOL Polygon    0.5        0.72       0.08\nSHIB ERC20     200,000    200,000    370,000\n\nOTHER COINS\nADA            1          2          0.8\nALGO           0.05       0.12       0.008\nATOM           0.01       0.05       0.02\nAVAX AVAXC     0.01       0.012      0.008\nETC            0.01       0.012      0.004\nFIL            0.001      0.006      0.0005\nXLM            0.5        1.5        0.001\n```\n\nFees are in the coin being withdrawn. Always select the correct network to avoid loss of funds. Check the Webot app for the latest values.",
+      "keywords": [
+        "crypto fee",
+        "withdraw fee",
+        "withdrawal fee",
+        "deposit fee",
+        "minimum deposit",
+        "minimum withdrawal",
+        "btc fee",
+        "eth fee",
+        "usdt fee",
+        "usdc fee",
+        "sol fee",
+        "xrp fee",
+        "doge fee",
+        "ltc fee",
+        "bnb fee",
+        "ada fee",
+        "link fee",
+        "network fee",
+        "erc20 fee",
+        "trc20 fee",
+        "bep20 fee",
+        "加密货币手续费",
+        "提现手续费",
+        "最低提现",
+        "最低充值",
+        "手续费",
+        "提币手续费",
+        "充币最低",
+        "trc20",
+        "erc20",
+        "bep20",
+        "network",
+        "coin fee",
+        "crypto withdrawal",
+        "crypto deposit limit"
+      ],
+      "category": "crypto-assets"
+    },
+    {
+      "id": "password-reset",
+      "question": "How do I reset my account password?",
+      "answer": "You can reset your password from the Webot app or website. Note: for security, withdrawals will be suspended for 24 hours after a password reset.\n\nApp: Open Webot app → Account → Forgot password? → Enter your email → Complete verification → Set new password.\n\nWeb: Go to the Webot login page → Forgot password? → Follow the steps.",
+      "keywords": [
+        "password",
+        "reset password",
+        "forgot password",
+        "change password",
+        "密码",
+        "忘记密码",
+        "重置密码",
+        "修改密码",
+        "login problem",
+        "can't login",
+        "account access"
+      ],
+      "category": "account"
+    },
+    {
+      "id": "2fa-reset",
+      "question": "How do I reset Google Authenticator (2FA)?",
+      "answer": "If your Google Authenticator is working correctly, you can reset it in the Webot app or web.\n\nApp: Home → Avatar → Security → Multi-factor authentication → Google Authenticator → Reset Google Authenticator → Select 'I have current 2FA' → Enter verification code → Confirm.\n\nIf your Google Authenticator is lost or not accessible, please contact customer support at @pionexusTestSupportBot for manual reset assistance.",
+      "keywords": [
+        "2fa",
+        "google authenticator",
+        "authenticator",
+        "two factor",
+        "authentication",
+        "谷歌验证",
+        "二次验证",
+        "动态码",
+        "验证码",
+        "reset 2fa",
+        "lost authenticator",
+        "can't login 2fa"
+      ],
+      "category": "account",
+      "images": [
+        {
+          "file_id": "AgACAgEAAxkBAAIBmGnVdX_y3gwVY4Q6m4dkigROFX-GAAK6DGsblKSoRqPBZb0tvhhDAQADAgADeQADOwQ",
+          "caption": "App: Tap profile icon → Settings → Security → Multi-factor authentication"
+        }
+      ]
+    },
+    {
+      "id": "kyc-verification",
+      "question": "How do I complete KYC identity verification?",
+      "answer": "Required documents for Webot identity verification:\n- SSN or TIN (required)\n- Government-issued ID: Passport, State Driver's License (front & back), or State/Federal ID card (front & back)\n\nTips for success:\n- Use an unexpired, physical original document (no photocopies or digital screenshots)\n- Ensure the full document is visible, no parts covered or cropped\n- Use high-resolution, clear photos without glare\n- Webot supports specific US states — confirm your state is supported\n\nApp: Account → Identity Verification → Follow the steps",
+      "keywords": [
+        "kyc",
+        "identity",
+        "verify",
+        "verification",
+        "documents",
+        "id",
+        "passport",
+        "driver license",
+        "ssn",
+        "实名认证",
+        "身份认证",
+        "认证",
+        "审核",
+        "kyc rejected",
+        "verification failed",
+        "id verification"
+      ],
+      "category": "account"
+    },
+    {
+      "id": "deposit-ach-pending",
+      "question": "Why is my ACH deposit still pending?",
+      "answer": "ACH deposits require time to process through bank settlement. Even if your bank shows the payment was deducted, it can take up to 4 business days for Webot to receive and confirm the transfer. The order status will remain 'pending' during this time. If the status doesn't update after 4 business days, contact support at service@webot.com.",
+      "keywords": [
+        "deposit pending",
+        "ach pending",
+        "bank deducted",
+        "payment deducted",
+        "order pending",
+        "deposit not showing",
+        "deposit processing",
+        "充值未到账",
+        "pending deposit",
+        "bank transfer pending"
+      ],
+      "category": "deposits"
+    },
+    {
+      "id": "deposit-hold",
+      "question": "Why can't I withdraw my recently deposited funds?",
+      "answer": "Deposited funds have a holding period before they can be withdrawn:\n- Bank Account (ACH): 14 days after deposit is credited\n- Debit Card: 10 days after deposit is credited\n- Wire Transfer: 24 hours after deposit is credited\n\nTo check your withdrawable time in the app: Home → Deposit → History → Card → Withdrawable Time.",
+      "keywords": [
+        "can't withdraw",
+        "withdrawal hold",
+        "holding time",
+        "funds locked",
+        "unavailable balance",
+        "withdrawable time",
+        "debit card hold",
+        "ach hold",
+        "资金冻结",
+        "无法提现",
+        "hold period",
+        "funds unavailable",
+        "locked funds"
+      ],
+      "category": "deposits"
+    },
+    {
+      "id": "deposit-3ds",
+      "question": "What is 3D Secure (3DS) and how to complete it?",
+      "answer": "3DS is a security verification required for debit card deposits. When prompted:\n- Challenge flow: Enter the PIN or one-time passcode sent by your bank\n- Frictionless flow: Wait 2-3 seconds, the page auto-redirects\n\nCommon reasons 3DS fails:\n- Your card issuer does not support 3DS\n- Your bank blocks crypto exchange payments\n- Verification code not entered within 15 minutes\n\nIf 3DS keeps failing, contact your bank or try a different card.",
+      "keywords": [
+        "3ds",
+        "3d secure",
+        "card declined",
+        "debit card failed",
+        "debit card error",
+        "card verification",
+        "deposit failed debit",
+        "debit not working",
+        "信用卡",
+        "银行卡",
+        "卡片充值失败"
+      ],
+      "category": "deposits"
+    },
+    {
+      "id": "wire-transfer",
+      "question": "How do I deposit via Wire Transfer?",
+      "answer": "Wire Transfer deposits:\n- Fee: $20 charged by Webot\n- Speed: 1-5 business days (weekdays only)\n- No deposit limit\n\nSteps:\n1. Log in to Webot web → Wallet → Deposit USD → Wire Transfer\n2. Complete KYC if not done yet\n3. Read the important notes carefully\n4. Copy your Unique Reference Code — include it in the memo/reference field of your wire\n5. Use the bank details shown on screen to send your wire\n6. Click 'I have completed the wire'\n\nImportant: Webot only accepts wires from accounts in the Webot account owner's name. Joint accounts and family funds are not accepted.",
+      "keywords": [
+        "wire transfer",
+        "wire deposit",
+        "bank wire",
+        "swift",
+        "wire instructions",
+        "电汇",
+        "电报汇款",
+        "wire fee",
+        "how to wire",
+        "bank transfer"
+      ],
+      "category": "deposits"
+    },
+    {
+      "id": "crypto-receive",
+      "question": "How do I receive/deposit crypto on Webot?",
+      "answer": "To deposit crypto from another platform or wallet:\n\nApp: Home → Deposit → Deposit → Receive from exchange/wallet → Search for the coin → Select the correct network → Copy your deposit address → Send from the other platform.\n\nWeb: Log in → Wallet → Receive Crypto → Choose coin and network → Copy address.\n\nWarning: Always select the same network on both platforms. Sending to the wrong network will result in permanent loss of funds.",
+      "keywords": [
+        "receive crypto",
+        "deposit crypto",
+        "crypto deposit",
+        "transfer crypto",
+        "receive bitcoin",
+        "receive eth",
+        "receive usdt",
+        "充值加密货币",
+        "coin deposit",
+        "crypto transfer in",
+        "deposit address",
+        "wallet address"
+      ],
+      "category": "deposits"
+    },
+    {
+      "id": "crypto-send",
+      "question": "How do I send/withdraw crypto from Webot?",
+      "answer": "To send crypto to an external wallet or exchange:\n\nApp: Home → Account → ... → Send & Receive → Send to exchange/wallet → Select coin → Choose network → Enter address → Enter amount → Submit → Confirm.\n\nWeb: Wallet → Withdrawal Crypto → Choose coin → Select network → Enter address and amount → Confirm.\n\nWarning: Double-check the network and address. Wrong network = permanent fund loss. Crypto withdrawals are irreversible.",
+      "keywords": [
+        "send crypto",
+        "withdraw crypto",
+        "crypto withdrawal",
+        "send bitcoin",
+        "send eth",
+        "send usdt",
+        "transfer out",
+        "external wallet",
+        "withdraw to wallet",
+        "提币",
+        "加密货币提现",
+        "发送加密货币"
+      ],
+      "category": "withdrawals"
+    },
+    {
+      "id": "txid-tracking",
+      "question": "How do I track a crypto transaction (TXID)?",
+      "answer": "To track a crypto transaction:\n1. Find your TXID in Webot's transaction history\n2. Go to a blockchain explorer for that coin:\n   - Bitcoin: blockchain.com or blockchair.com\n   - Ethereum/ERC20: etherscan.io\n   - Tron/TRC20: tronscan.org\n   - Solana: solscan.io\n   - BNB/BEP20: bscscan.com\n3. Paste the TXID in the search bar to see the transaction status",
+      "keywords": [
+        "txid",
+        "transaction id",
+        "track transaction",
+        "transaction status",
+        "blockchain explorer",
+        "tx hash",
+        "transaction not received",
+        "crypto not arrived",
+        "pending transaction",
+        "交易id",
+        "交易查询",
+        "区块链查询"
+      ],
+      "category": "withdrawals"
+    },
+    {
+      "id": "withdraw-bank",
+      "question": "How do I withdraw USD to my bank account?",
+      "answer": "USD withdrawal steps:\n\nApp: Home → Account → ... → Withdrawal → Bank Account or Wire Transfer → Enter amount → Submit → Confirm.\n\nFees:\n- Bank Account (ACH): $12.00, 3-5 business days\n- Wire Transfer: $20.00, 3-7 business days\n\nRequirements:\n- KYC must be complete and ID not expired\n- No active deposit holding period on funds\n- Bank account must be in your own name\n\nIf your ID is near expiry, contact support to resubmit your document before withdrawing.",
+      "keywords": [
+        "withdraw usd",
+        "bank withdrawal",
+        "withdraw to bank",
+        "withdraw money",
+        "cash out",
+        "提现美元",
+        "提现到银行",
+        "usd withdrawal",
+        "bank account withdrawal",
+        "withdraw dollars"
+      ],
+      "category": "withdrawals"
+    },
+    {
+      "id": "investment-scam",
+      "question": "How do I avoid investment scams?",
+      "answer": "Crypto transactions are irreversible. If you send crypto to a scammer, it cannot be recovered.\n\nCommon scam types: Ponzi schemes, pyramid schemes, fake high-return investments.\n\nRed flags:\n- Promises of high returns with no risk\n- Pressure to bring in more people\n- Grammar errors in communications\n- Unverifiable organizations\n\nIf you suspect a scam, report it to:\n- SEC: investor.gov\n- FTC: consumer.ftc.gov\n- Your state's securities regulator\n\nWebot will never ask you to send funds to a third party for 'investment management'.",
+      "keywords": [
+        "scam",
+        "fraud",
+        "investment scam",
+        "ponzi",
+        "pyramid",
+        "fake investment",
+        "too good to be true",
+        "suspicious",
+        "被骗",
+        "诈骗",
+        "投资骗局",
+        "欺诈",
+        "scammer",
+        "pig butchering"
+      ],
+      "category": "security"
+    },
+    {
+      "id": "webot-upgrade",
+      "question": "What is the difference between Pionex.US and Webot?",
+      "answer": "Webot is the official brand upgrade of Pionex.US, designed specifically for US users.\n\nKey points:\n- No re-registration needed. Log in with your existing Pionex.US email and password.\n- All funds, positions, trading history, and referral codes were automatically synced 1:1.\n- All assets are backed by 1:1 reserve — fully secure and withdrawable.\n- Webot offers a smoother trading experience built on native architecture.\n\nIf you have issues logging in after the upgrade, contact support at @pionexusTestSupportBot.",
+      "keywords": [
+        "pionex",
+        "pionex.us",
+        "webot upgrade",
+        "pionex to webot",
+        "rebrand",
+        "migration",
+        "same account",
+        "old account",
+        "品牌升级",
+        "账号迁移",
+        "pionex升级",
+        "换名字"
+      ],
+      "category": "platform"
+    },
+    {
+      "id": "bdag-listing",
+      "question": "Is BDAG listed on Webot?",
+      "answer": "Yes! BDAG (BlockDAG) is listed on Webot with the BDAG/USDT trading pair.\n\nDeposit & Withdrawal:\n- Network: BLOCKDAG\n- Minimum deposit: 10 BDAG\n- Minimum withdrawal: 20 BDAG\n- Withdrawal fee: 10 BDAG\n\nDeposit is live (Phase 1 gradually available). Withdrawal is live.\n\nRisk Warning: Trading in the crypto market carries substantial risk. Please trade cautiously. Webot cannot assure any profit and will not be responsible for trading losses.\n\nIf you encounter any issues, please contact customer service through the Webot app or website.",
+      "keywords": [
+        "bdag",
+        "blockdag",
+        "bdag listing",
+        "bdag/usdt",
+        "bdag deposit",
+        "bdag withdrawal",
+        "bdag trading",
+        "blockdag listing",
+        "block dag"
+      ],
+      "category": "crypto-assets"
+    },
+    {
+      "id": "human-support",
+      "question": "How do I reach a human agent?",
+      "answer": "For human support, please contact @pionexusTestSupportBot directly on Telegram.",
+      "keywords": [
+        "human",
+        "agent",
+        "人工",
+        "客服",
+        "support",
+        "help",
+        "转人工"
+      ],
+      "category": "support"
+    },
+    {
+      "id": "non-us-eligibility",
+      "category": "account",
+      "question": "Can I use Webot if I'm not from the US?",
+      "answer": "We appreciate your interest in Webot! Unfortunately, Webot is currently only available to US residents. We are not able to accept registrations from users outside the United States at this time.\n\nIf you are looking for a crypto trading platform outside the US, you may want to explore Pionex (pionex.com) — though please note that Webot and Pionex are separate, independent companies and we have no affiliation with them.\n\nWe hope to expand to more regions in the future. Thank you for your patience!",
+      "keywords": [
+        "non-us",
+        "not us",
+        "outside us",
+        "indonesia",
+        "asia",
+        "canada",
+        "uk",
+        "europe",
+        "international",
+        "other country",
+        "not american",
+        "us only",
+        "us citizen",
+        "us resident",
+        "eligible",
+        "can i use webot",
+        "country",
+        "非美国",
+        "海外用户",
+        "国际用户"
+      ]
+    },
+    {
+      "id": "app-download",
+      "category": "account",
+      "question": "How do I download the Webot app?",
+      "answer": "Great news — the Webot app is available on multiple platforms!\n\n- iOS (iPhone/iPad): Search \"Webot\" on the App Store, or download directly from the Webot website.\n- Android: Search \"Webot\" on Google Play, or download the APK directly from the Webot website (webot.com).\n- Web: You can also use Webot directly in your browser at webot.com — no download needed.\n\nAlways download from the official Webot website or app stores to avoid fake apps. If you have trouble installing, make sure your device meets the minimum OS requirements and that you have enough storage space.",
+      "keywords": [
+        "download",
+        "app",
+        "apk",
+        "android",
+        "ios",
+        "iphone",
+        "google play",
+        "app store",
+        "install",
+        "mobile",
+        "下载",
+        "安装",
+        "手机",
+        "安卓",
+        "苹果",
+        "apk download",
+        "latest version",
+        "update app"
+      ]
+    },
+    {
+      "id": "balance-not-showing",
+      "category": "deposits",
+      "question": "Why is my deposited crypto not showing in my available balance?",
+      "answer": "Don't worry — this is normal and your funds are safe! There are two balance types on Webot:\n\n- Total Balance: Shows all your assets including recently deposited funds that are still being confirmed.\n- Available Balance: Only shows funds that are fully cleared and ready to trade or withdraw.\n\nHere are the common reasons your deposit may not appear in Available Balance yet:\n\n1. Waiting for blockchain confirmations — crypto deposits require a certain number of block confirmations before they are credited. This varies by coin and network traffic.\n2. Holding period — USD deposits have a holding period (ACH: 14 days, Debit Card: 10 days, Wire: 24 hours) before they become available for withdrawal.\n3. Deposit channel under maintenance — if the coin's deposit channel is temporarily under maintenance, crediting may be delayed until maintenance is complete.\n\nTo check your deposit status: App → Home → Deposit → History.\n\nIf your deposit has been confirmed on the blockchain but still hasn't appeared after a reasonable time, please contact support at @pionexusTestSupportBot.",
+      "keywords": [
+        "balance not showing",
+        "available balance",
+        "total balance",
+        "deposit not credited",
+        "funds not available",
+        "can't trade",
+        "deposit received but",
+        "balance missing",
+        "where is my deposit",
+        "deposit not reflected",
+        "余额不显示",
+        "可用余额",
+        "总余额",
+        "充值未到账"
+      ]
+    },
+    {
+      "id": "transfer-from-external-wallet",
+      "category": "deposits",
+      "question": "How do I transfer crypto from MetaMask or Trust Wallet to Webot?",
+      "answer": "Happy to walk you through it! Here are the steps to transfer crypto from MetaMask, Trust Wallet, or any external wallet to Webot:\n\nStep 1 — Get your Webot deposit address:\n- App: Home → Deposit → Receive from exchange/wallet → Search for the coin → Select the correct network → Copy the deposit address.\n- Web: Wallet → Receive Crypto → Choose coin and network → Copy address.\n\nStep 2 — Send from your external wallet:\n- Open MetaMask or Trust Wallet\n- Select the coin and the correct network (must match what you selected in Webot)\n- Paste your Webot deposit address\n- Enter the amount and confirm\n\nImportant warnings:\n- Always double-check the network matches on both sides. For example, if you copied an ERC20 address on Webot, send via ERC20 on your wallet too.\n- Sending on the wrong network will result in permanent loss of funds — this cannot be reversed.\n- Start with a small test amount if it is your first transfer.\n- There is a minimum deposit amount per coin — check the deposit page for details.",
+      "keywords": [
+        "metamask",
+        "trust wallet",
+        "external wallet",
+        "transfer from wallet",
+        "send from metamask",
+        "send from trust wallet",
+        "cold wallet",
+        "hardware wallet",
+        "wallet to webot",
+        "from metamask",
+        "from trust wallet",
+        "erc20 deposit",
+        "从钱包转入",
+        "外部钱包",
+        "小狐狸钱包"
+      ]
+    },
+    {
+      "id": "trading-fees",
+      "category": "crypto-assets",
+      "question": "What are the trading fees on Webot?",
+      "answer": "Webot charges the following spot trading fees:\n\n- Taker fee: 0.5% per trade\n- Maker fee: 0.1% per trade\n\nTaker vs Maker explained:\n- Taker: You place a market order that fills immediately from existing orders in the book.\n- Maker: You place a limit order that sits in the order book and gets filled later.\n\nFees are deducted automatically from the proceeds of your trade — you do not need to deposit extra funds to cover them. For example, if you sell 100 USDT worth of BTC as a taker, you receive 99.5 USDT after the 0.5% fee.\n\nFor crypto withdrawal fees, those are separate and charged per withdrawal. You can check crypto withdrawal fees in the Webot app or ask me about a specific coin.",
+      "keywords": [
+        "trading fee",
+        "trade fee",
+        "taker fee",
+        "maker fee",
+        "transaction fee",
+        "commission",
+        "how much fee",
+        "fee percentage",
+        "spot fee",
+        "trading cost",
+        "交易手续费",
+        "taker",
+        "maker",
+        "手续费多少",
+        "佣金"
+      ]
+    },
+    {
+      "id": "price-prediction",
+      "category": "platform",
+      "question": "What will the listing price be? What do you think about the price?",
+      "answer": "That's a question a lot of people are curious about! However, Webot does not comment on price predictions, price targets, or expected price movements for any asset.\n\nCrypto markets are highly volatile and prices are determined by supply and demand — no one can predict them with certainty. Making price predictions could also be considered financial advice, which we are not licensed to provide.\n\nFor market data and price information, you can check platforms like CoinMarketCap or CoinGecko. For trading decisions, please do your own research and consider your personal risk tolerance.\n\nRemember: never invest more than you can afford to lose.",
+      "keywords": [
+        "price prediction",
+        "listing price",
+        "price target",
+        "what price",
+        "how much will",
+        "price forecast",
+        "will it pump",
+        "price estimate",
+        "token price",
+        "coin price",
+        "价格预测",
+        "上市价格",
+        "会涨吗",
+        "价格目标"
+      ]
+    },
+    {
+      "id": "deposit-maintenance",
+      "category": "deposits",
+      "question": "Why are deposits or withdrawals suspended for a coin?",
+      "answer": "From time to time, deposits or withdrawals for a specific coin may be temporarily suspended. This is usually due to:\n\n- Wallet maintenance or upgrades on Webot's end\n- Network upgrades or hard forks on the coin's blockchain\n- Security reviews\n\nWhat you should do:\n- Do NOT send funds to a Webot deposit address while deposits are suspended. If you send during maintenance, your funds may not be credited until maintenance is complete, or in some cases may be delayed indefinitely.\n- Wait for an official announcement in the Webot community or app before sending.\n- Already sent? If you sent before the suspension was announced and the blockchain confirms the transaction, your funds will typically be credited once maintenance is complete. Please contact support at @pionexusTestSupportBot if you need help.\n\nWe always announce maintenance windows in advance when possible. Follow the official Webot channels for updates.",
+      "keywords": [
+        "deposit suspended",
+        "withdrawal suspended",
+        "deposits paused",
+        "maintenance",
+        "deposit channel",
+        "suspended",
+        "paused",
+        "unavailable",
+        "wallet maintenance",
+        "deposit not working",
+        "充值暂停",
+        "提现暂停",
+        "维护",
+        "系统维护"
+      ]
+    },
+    {
+      "id": "how-do-i-link-a-bank-account-to-webot-",
+      "category": "deposits",
+      "question": "How do I link a bank account to Webot?",
+      "answer": "To link a bank account to Webot, go to your account settings and select the Wallet or Payment Methods section. From there, you can add a bank account by entering your routing number and account number. Webot uses ACH to verify your bank account, which may involve small test deposits or instant verification through your online banking credentials. Once verified, you can use your bank account to deposit or withdraw USD. Please note that only US-based bank accounts are supported at this time.",
+      "keywords": [
+        "bank account",
+        "link bank",
+        "ACH",
+        "payment method",
+        "add bank",
+        "connect bank"
+      ]
+    },
+    {
+      "id": "my-kyc-verification-was-rejected-what-sh",
+      "category": "account",
+      "question": "My KYC verification was rejected. What should I do?",
+      "answer": "If your KYC verification was rejected, do not worry. This can happen for a few common reasons, such as a blurry or incomplete document photo, an expired ID, or a mismatch between your submitted information and your official documents. Here is what you can do: First, review any rejection email or notification you received, as it will often indicate the reason. Then, return to the KYC section in your account and resubmit with a clear, well-lit photo of a valid government-issued ID and make sure all details match exactly. If you continue to have trouble, please reach out to our support team and we will be happy to help you resolve it.",
+      "keywords": [
+        "KYC rejected",
+        "verification failed",
+        "identity verification",
+        "resubmit KYC",
+        "KYC declined"
+      ]
+    },
+    {
+      "id": "how-many-block-confirmations-are-require",
+      "category": "crypto-assets",
+      "question": "How many block confirmations are required for a BDAG deposit?",
+      "answer": "BDAG deposits on Webot require a certain number of block confirmations before the funds are credited to your account. Block confirmation requirements help ensure the security and finality of transactions on the network. The exact number of required confirmations for BDAG may vary and can be subject to change. You can typically find the current confirmation requirement displayed on the deposit page for BDAG within the Webot app or platform. If your deposit is taking longer than expected, you can use the transaction ID (TXID) to check the current confirmation status on a blockchain explorer. If the required confirmations have been met and your balance has still not updated, please contact our support team.",
+      "keywords": [
+        "BDAG",
+        "block confirmations",
+        "deposit confirmations",
+        "BDAG deposit",
+        "network confirmations"
+      ]
+    },
+    {
+      "id": "can-i-have-multiple-accounts-on-webot-",
+      "category": "account",
+      "question": "Can I have multiple accounts on Webot?",
+      "answer": "No, each person is only permitted to have one account on Webot. Our terms of service require that every account is tied to a unique individual identity, which is verified through our KYC process. Creating multiple accounts is not allowed and may result in the suspension or closure of all associated accounts. If you are having trouble accessing your existing account, please use the password reset option or contact our support team for assistance.",
+      "keywords": [
+        "multiple accounts",
+        "two accounts",
+        "duplicate account",
+        "second account",
+        "one account"
+      ]
+    },
+    {
+      "id": "how-do-i-delete-my-webot-account-",
+      "category": "account",
+      "question": "How do I delete my Webot account?",
+      "answer": "To delete your Webot account, you must first withdraw all funds from your account. Please note that account deletion is permanent and cannot be reversed. Once your balance reaches zero, you can submit a deletion request through:\n\nWebsite: Hover over your profile photo, then go to Account Settings > Delete Account\nApp: Go to Account > Settings > Profile > Delete Account\n\nIf you need additional assistance, please contact our support team. They will help verify your identity and guide you through the process. Please keep in mind that deleting your account will permanently remove access to your trading history, and the process may take a few business days to complete.\n\nKeywords: delete account, close account, remove account, deactivate account, account deletion\nSources: How do I delete my Webot account?",
+      "keywords": [
+        "delete account",
+        "close account",
+        "remove account",
+        "deactivate account",
+        "account deletion"
+      ]
+    },
+    {
+      "id": "crypto-deposit-withdrawal-supported",
+      "category": "crypto-assets",
+      "question": "Which crypto tokens can I deposit and withdraw on Webot?",
+      "answer": "Webot supports the following crypto tokens for deposit and withdrawal:\n\nBTC (Bitcoin) | USDT (ERC20, TRC20, BEP20) | ETH (ERC20, BASE) | AAVE | ADA | ALGO | APE | ATOM | AVAX | AXS | BCH | BDAG | BNB | COMP | CRV | DOGE | ETC | FIL | FTM | GALA | GRT | IMX | IP | KAS | LINK | LTC | MANA | OP | POL | SHIB | SOL | UNI | USDC (ERC20, Solana, BASE) | XRP | XLM | YFI and more.\n\nEach coin has a minimum deposit, minimum withdrawal, and withdrawal fee that varies by network. For the full fee table, visit the Webot app under Wallet → Withdraw → select coin → view fee details.\n\nNote: Not all trading pairs on Webot support direct crypto deposit/withdrawal. If you need the fee for a specific coin, just ask!",
+      "keywords": [
+        "deposit tokens",
+        "withdraw tokens",
+        "supported crypto",
+        "which coins",
+        "what tokens",
+        "crypto deposit",
+        "crypto withdrawal",
+        "deposit fee",
+        "withdrawal fee",
+        "minimum deposit",
+        "minimum withdrawal",
+        "supported coins"
+      ]
+    },
+    {
+      "id": "what-is-memo-tag",
+      "category": "deposits",
+      "question": "What is a Memo or Destination Tag and do I need it?",
+      "answer": "Some cryptocurrencies require both an address AND a Memo (or Destination Tag) to receive funds correctly. The address routes funds to Webot, while the Memo ensures they are credited to your specific account. Think of the address as a building street address, and the Memo as your apartment number — both are needed.\n\nTokens that commonly require a Memo on Webot: ATOM, XLM, XRP, EOS.\n\nIf you send funds to a Memo-required address without including the Memo, your funds may be lost. Always check the deposit page for your specific token on Webot to confirm if a Memo is required before sending.",
+      "keywords": [
+        "memo",
+        "tag",
+        "destination tag",
+        "memo required",
+        "XRP tag",
+        "XLM memo",
+        "ATOM memo",
+        "deposit memo",
+        "missing memo"
+      ]
+    },
+    {
+      "id": "pionex-to-webot-upgrade",
+      "category": "platform",
+      "question": "What is the difference between Pionex.US and Webot?",
+      "answer": "Webot is the official brand upgrade of Pionex.US, built to provide a better experience for US users. No re-registration is needed — you can log in to Webot with your existing Pionex.US email and password. Your funds, positions, trading history, and referral codes are automatically synced.\n\nKey differences: New features like 2025 tax reports and SSN/TIN updates are available exclusively on Webot. Future updates will be released on Webot only. The Pionex.US and Webot web platforms are currently functionally identical.\n\nWebot is an officially certified Money Services Business (MSB) with NMLS ID: 2284360, operating across 48 states.",
+      "keywords": [
+        "pionex",
+        "pionex.us",
+        "webot",
+        "upgrade",
+        "migration",
+        "rebrand",
+        "difference",
+        "two apps",
+        "separate apps",
+        "transfer assets"
+      ]
+    },
+    {
+      "id": "convert-small-balance",
+      "category": "trading-bots",
+      "question": "How do I convert small coin balances to USDT on Webot?",
+      "answer": "Small coin balances that are too small to trade can be converted to USDT directly in the Webot app.\n\nApp: Go to [Assets] and look for the option to convert small balances. Select the coins you want to convert and confirm.\n\nThis is useful for cleaning up dust balances left over after trading. Note that the converted amount may be slightly lower than market price due to conversion fees.",
+      "keywords": [
+        "small balance",
+        "dust",
+        "convert to USDT",
+        "small coins",
+        "leftover balance",
+        "dust conversion"
+      ]
+    },
+    {
+      "id": "email-verification-not-received",
+      "category": "account",
+      "question": "I am not receiving the email verification code. What should I do?",
+      "answer": "If you are not receiving the email verification code, try these steps:\n\n1. Check your spam or junk folder — verification emails sometimes end up there.\n2. Make sure you entered the correct email address.\n3. Wait a few minutes and request a new code — there may be a short delay.\n4. Add no-reply@webot.com to your contacts or whitelist to prevent future filtering.\n5. If your inbox is full, delete some emails and try again.\n\nIf none of the above works, please contact our support team at @pionexusTestSupportBot.",
+      "keywords": [
+        "email code",
+        "verification email",
+        "not receiving email",
+        "no email",
+        "verification code",
+        "email not arriving",
+        "spam"
+      ]
+    },
+    {
+      "id": "referral-link",
+      "category": "account",
+      "question": "How do I find my referral or invitation link on Webot?",
+      "answer": "To find your referral link on Webot:\n\nApp: Tap your profile icon → [Invite Friends] or [Referral]. Your unique invitation link and code will be displayed there.\n\nWeb: Log in → click your avatar → [Invite Friends].\n\nYou can share your referral link to earn commission when your friends trade on Webot.",
+      "keywords": [
+        "referral",
+        "invite",
+        "invitation link",
+        "referral code",
+        "invite friends",
+        "commission",
+        "refer"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+# Dependencies
+node_modules/
+
+# Environment — never commit real credentials
+.env
+
+# Runtime data — generated at runtime, not part of source
+data/mappings.json
+data/gap-log.jsonl
+data/conversation-log.jsonl
+data/faq-suggestions.json
+data/feedback.jsonl
+data/report.html
+
+# Claude Code session files
+.claude/
+
+# Intercom export artifacts
+exports/
+
+# OS
+.DS_Store
