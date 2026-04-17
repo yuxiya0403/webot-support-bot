@@ -6,7 +6,7 @@ state: "published"
 url: "https://intercom.help/webot/en/articles/14119846-martingale-dca-bot-standard-mode"
 author_id: 10009720
 created_at: 2026-03-19T06:21:46.000Z
-updated_at: 2026-03-19T06:21:47.000Z
+updated_at: 2026-04-08T00:32:39.000Z
 ---
 # Martingale (DCA) Bot - Standard Mode
 > Contents
@@ -14,8 +14,6 @@ updated_at: 2026-03-19T06:21:47.000Z
 > What is the Webot Martingale Bot?
 > Martingale Bot Parameters Setting
 > Martingale Bot VS Grid Tradi...
-_
-
 Contents
 
 - [The classic Martingale strategy](#h_01JZ4WA0Y25XYBBBRGYKQ2QX05)
@@ -62,11 +60,11 @@ Webot Martingale Bot does not use leverage and can freely set the percentage of 
 
 According to the default AI parameters, the Martingale Bot has reached 205.68% APR in a complete cycle of one and a half years, with a total of 623 arbitrage times. In the middle of 519, the max drawdown is -52.84%, which is slightly lower than holding BTC with a -55.44% drawdown.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936794/47c98bc517f643c2f03b33f16513/48487779041305?expires=1776232800&signature=91720cd8a7d28ea1f0eb7c278791b39a1d99afc1c56903586231e76ad0541ad1&req=diEgEcB9m4ZWXfMW3nq%2BgU3yT%2Brn25FC0y4ItMrtZtqo3yUb7QabOFMnIkXU%0AHPeSEpQYyjuo7YFrmSOgy1yI6iY%3D%0A)
 
 If we make the strategy more conservative and increase the percentage of the price scale, Martingale Bot can obtain more stable profits and a smaller drawdown. As can be seen from the table below, if you increase your position for every 10% drop, the max drawdown of the Martingale Bot is only -16.37%, which is far less than the a -55.44% of holding, and the profit is as high as 122.12%, which keeps the good balance between the benefits and risks.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936832/40bd6e5d169a727e2b966feddad2/48487792262553?expires=1776232800&signature=1af9e63e0147113404eb2475103b8cf4729ebf4c38bc5a7ebc901166028b1b5a&req=diEgEcB9m4lcW%2FMW3nq%2Bgd7Zyuk5ZR4GDMBJ60t%2BJMhnJo4gYNjXTSgxL%2Bg%2B%0AOWeDMaLJGrKpzhIoMltTsP1YS%2BM%3D%0A)
 
 Martingale Bot Parameters Setting
 
@@ -78,13 +76,13 @@ Martingale AI strategy provides parameters based on the volatility of different 
 
 Balanced
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936843/197bbf077c65d5f49828023a642b/48487792271257?expires=1776232800&signature=6cff68cb271964de9100d8da5553d52c6968537d8da10df0a1555348bd8ea812&req=diEgEcB9m4lbWvMW3nq%2BgWyIwOAiGqU2wB6KEOMzO%2Fj9gF2bfmfl1Rss%2Fgzk%0AHn8ByHZEfmFsliVDUsNBtGR8Ac0%3D%0A)
 
 The balanced type offers moderate benefits and risks, providing relatively high volume scaling and fewer safety orders, allowing the strategy to maintain a high fund utilization rate.
 
 Conservative
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936868/c756c7a82c54894561dab8cc7792/48487779048985?expires=1776232800&signature=8c04f2bf6a203a7d4a094da4cf4284401decb2eb4e359632ae4d487879607c5a&req=diEgEcB9m4lZUfMW3nq%2BgUgNSwQ5gyTHHKYlQgO1ERslYo%2Bexp4SV3%2BhfPEX%0AfUff%2FQ039%2Fag4V996f%2BQN0NnoKU%3D%0A)
 
 The conservative type offers lower risks and returns, with relatively lower volume scaling and more safety orders, allowing the strategy to maintain a moderate fund utilization rate.
 
@@ -94,7 +92,7 @@ The manual setting includes seven parameters, categorized into common and advanc
 
 Common Parameters
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936893/17bb1b1dff4de5be283348cd476a/48487792281113?expires=1776232800&signature=f0bb588c1f68517599e59a395710c607639bb99ac37cd87e772564a659f48ced&req=diEgEcB9m4lWWvMW3nq%2BgQpYEx29fD8t0owIk3phQljofIEwyPmAJmH%2F2qUr%0ACQIOZbkQg3OUH1safxgK3A9qt3I%3D%0A)
 
 There are three parameters in common:
 
@@ -106,7 +104,7 @@ There are three parameters in common:
 
 Advanced Parameters
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936914/f676c4ba269ada224e396ce80d4f/48487792282649?expires=1776232800&signature=29a335145bd8bb68c61060d49cf419ea1e8e585a1f5b551a7419a737cea54aa6&req=diEgEcB9m4heXfMW3nq%2BgTYfRikWxsJMDr0tuPBCOF8zyMc4aFRvvJ9xqIwn%0AqR36ovq3CE16Zabd68ihuwfJFJU%3D%0A)
 
 There are five parameters in advanced:
 
@@ -153,34 +151,34 @@ To get started, simply follow the tutorials on Webot Martingale strategy and cre
 **Step 1: **Open the [Webot app](https://www.webot.com/us/en-US/download) and click on [Bot] - [Create] to access the bot section.
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936952/b0ad0d8c8982c6624e6e5a248456/48487792284825?expires=1776232800&signature=9ae9b1da280cafd12885b28b4047181376af198decefb583ace18b220fad16a1&req=diEgEcB9m4haW%2FMW3nq%2BgdJfPzR93TuYKmDf6rmemeZ8ESvSXIqkztob%2FHdC%0AWJBROxWkzEKCDhs1qN5d62aDz7k%3D%0A)
 
 **Step 2: **Click [All], then select [Martingale Bot] & choose [Standard mode].
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936996/3f3759a50b784c5b094c74132e3d/48539854105497?expires=1776232800&signature=8b1ebc030ba867a70b4d1d569b6f141be3e40c8bcc7297c1f60bf9175ae781d3&req=diEgEcB9m4hWX%2FMW3nq%2BgclieI48EQAiQHs0i%2BTApQwd7LFEWoNTxGs4eMw5%0AdQ9FftobMkZ%2Bz9LFe0kDlynEtwM%3D%0A)
 
-**Step 3****:** Choose your desired cryptocurrency pair, then click [AI Strategy]. Select your preferred risk level from the [Risk Preference] drop-down menu. You may configure additional parameters (optional), enter the investment amount, and then click [Create] followed by [Confirm] to successfully set up your bot.
+**Step 3:** Choose your desired cryptocurrency pair, then click [AI Strategy]. Select your preferred risk level from the [Risk Preference] drop-down menu. You may configure additional parameters (optional), enter the investment amount, and then click [Create] followed by [Confirm] to successfully set up your bot.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937018/89102819b2e4bfcf7665f4887a13/48487792294809?expires=1776232800&signature=69857f9c899fdb190484447d08936bf83908fe05ffb70f4fbeef2029d787cbe2&req=diEgEcB9moFeUfMW3nq%2Bgd%2B8O04FkM1PcjvXKQNhYO9XW08VS7IUOvSL7AXk%0AKI2z1BuJdwyMcct1g9ZSrvcSon8%3D%0A)
 
-[https://drive.google.com/file/d/1ViBMSS-1NYKQ_GG9JvA06GJqdv68b6Th/view?usp=drive_link](https://drive.google.com/file/d/1ViBMSS-1NYKQ_GG9JvA06GJqdv68b6Th/view?usp=drive_link)
+​[https://drive.google.com/file/d/1ViBMSS-1NYKQ_GG9JvA06GJqdv68b6Th/view?usp=drive_link](https://drive.google.com/file/d/1ViBMSS-1NYKQ_GG9JvA06GJqdv68b6Th/view?usp=drive_link)
 
 **On the Web：**
 
 **Step 1: **Log in to your [Webot account](https://accounts.webot.com/en/sign), click on [Trade] in the upper menu bar, and then select [Trading Bot].
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937047/4911823420befc7aa160d65b3439/48487779086745?expires=1776232800&signature=febe72e3e179909fb3410610521c70b691a48fa3c480526a30435581a3c7c7b4&req=diEgEcB9moFbXvMW3nq%2BgTu4QFQCLihrUXE8Gofp%2F1iZVyygKPPHduttapKF%0Ag%2BeBWnxiC3dRVThGHFY%2BmCjMmYM%3D%0A)
 
 **Step 2: **Click on [Bot] - [All], then select [Martingale Bot].
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937059/7c045d0646810adb9401454bc32f/48487779089177?expires=1776232800&signature=26b3c03361431f49cc6c097dc9168df040bbd19edee73814b79097e3e01a2d09&req=diEgEcB9moFaUPMW3nq%2BgfPQi2VE7027a0wWFW7XOz5u7aH8M2ltj%2B%2BbMiFx%0AJfJGUZcBW1VckDkWSjwu7svuLeI%3D%0A)
 
 **Step 3: **Choose your desired cryptocurrency pair, then click [Use AI Strategy]. Select your preferred risk level from the [Risk Preference] drop-down menu. You may configure additional parameters (optional), enter the investment amount, and then click [Create] followed by [OK] to successfully set up your bot.
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937093/a3c50f20748668f396a8b6a40903/48487792331801?expires=1776232800&signature=87d04f8ada3f64509f4842bdc1f427298382765a6e734c285938e85ae486c5d8&req=diEgEcB9moFWWvMW3nq%2BgVqzYmK7eTfrW5mUwQFGFiZJ7hTsT6go4jjElkt0%0AsHv9CqXA1%2B9X8TIa2v5sxq%2BZJlA%3D%0A)
 
 Martingale Bot display
 
@@ -188,7 +186,7 @@ The Martingale running bot interface is designed to be simple and user-friendly.
 
 This allows users to track both realized and unrealized profits, understand trading frequency, and evaluate the bot’s overall effectiveness based on market conditions and preset strategies.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937114/be5cba90dfc9eba62923ceb9ae96/48487792333721?expires=1776232800&signature=2464e8944b07f06982dd0edc698389b1ad543b955a1f2e6e370df90974e4ec6a&req=diEgEcB9moBeXfMW3nq%2BgfhB9J8f%2BVHzw%2FdGrSC%2FV15a5V3b1cuwvN632TiG%0AfHWpuMH9S58OzB0GpPClBHwoN64%3D%0A)
 
 - **Investment:** The total amount of funds allocated to the Martingale bot. This represents your capital input into the strategy.
 

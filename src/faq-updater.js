@@ -6,9 +6,14 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, "..");
 
-const CONVERSATION_LOG = path.join(projectRoot, "data/conversation-log.jsonl");
+const GAP_LOG_FILE = process.env.GAP_LOG_FILE
+  ? (path.isAbsolute(process.env.GAP_LOG_FILE) ? process.env.GAP_LOG_FILE : path.resolve(projectRoot, process.env.GAP_LOG_FILE))
+  : path.join(projectRoot, "data/gap-log.jsonl");
+const CONVERSATION_LOG = path.join(path.dirname(GAP_LOG_FILE), "conversation-log.jsonl");
 const FAQ_SUGGESTIONS_FILE = path.join(projectRoot, "data/faq-suggestions.json");
-const KB_FILE = path.join(projectRoot, "data/knowledge-base.json");
+const KB_FILE = process.env.KNOWLEDGE_BASE_FILE
+  ? (path.isAbsolute(process.env.KNOWLEDGE_BASE_FILE) ? process.env.KNOWLEDGE_BASE_FILE : path.resolve(projectRoot, process.env.KNOWLEDGE_BASE_FILE))
+  : path.join(projectRoot, "data/knowledge-base.json");
 
 // ---------------------------------------------------------------------------
 // Read helpers

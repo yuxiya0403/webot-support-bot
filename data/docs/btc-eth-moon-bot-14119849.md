@@ -6,11 +6,9 @@ state: "published"
 url: "https://intercom.help/webot/en/articles/14119849-btc-eth-moon-bot"
 author_id: 10009720
 created_at: 2026-03-19T06:22:00.000Z
-updated_at: 2026-04-06T07:32:14.000Z
+updated_at: 2026-04-08T00:43:35.000Z
 ---
 # BTC & ETH Moon Bot
-_
-
 **What is BTC/ETH Moon Bot?**
 
 BTC/ETH Moon was the first strategy introduced by Webot. Following over two years of real-market validation, it has achieved a peak return of up to 21×.
@@ -25,21 +23,21 @@ These grid-generated profits can be withdrawn at any time, allowing users to mai
 
 **Step 1:** Open the [Webot](https://www.webot.com/us/en-US) app and click [Bot] - [Create] - [Strategy] - select [BTC Moon] or [ETH Moon].
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177938669/f3ba569c999140fabf2f9a9f747d/14959552159631?expires=1776232800&signature=85b0fd27ab405e0e622b7454067033e75e3bd329c6d972a7887ee1ff7e6c7dc6&req=diEgEcB9lYdZUPMW3nq%2BgYxSS5P%2BtkLW%2FetniD%2BRFQZQmDSq6pxCfQaZnqPj%0Aa%2F2G1lQs18HbzlAXjOOwL495MIQ%3D%0A)
 
 **Step 2:** Select the token you wish to use, either [USD] or [USDT], enter the investment amount, and then click [Continue].
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177938697/5bea944a74adacb6f48e7e605a52/14959564987023?expires=1776232800&signature=973d00c0db85efb58d34e666f6027aa8908d8850709a8172459faf9031af1c5b&req=diEgEcB9lYdWXvMW3nq%2BgbuX681nqbJeb%2FJJz5nydyPeL1ev1H7u%2BIxzNjAq%0AgRIE5bCPY%2Bw2goN%2FGpJIgHx4b4g%3D%0A)
 
 **On WEB:**
 
 **Step 1:** Open the [Webot](https://www.webot.com/us/en-US) website and click [Trade] - [Trading Bot] - [Strategy] - select [BTC Moon] or [ETH Moon].
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240905003/cd17237993c47f1c3fe29bb3daa0/image.png?expires=1776232800&signature=03e800de9be195e035dd021d547a33953d0af4df3136def033077337d239acde&req=diIjFsB%2BmIFfWvMW3nq%2BgcnWnbx9kZhDr2iA4V%2BRmHeqxtn5j%2F3gQKm06N3A%0AOr8G2e17OP5yK31zp6ckAk43M1E%3D%0A)
 
 **Step 2:** Select the token you wish to use, either [USD] or [USDT], enter the investment amount, and then click [Create].
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177938794/09222597b995e93d9a7e188c8229/14959552163727?expires=1776232800&signature=6f139c0005cacf2b44b27cb92c8401d7df62219511c97ee04365b7624fa8a7df&req=diEgEcB9lYZWXfMW3nq%2BgeXUBhuiWtLhfeCXgjSGTqB03TDe%2BONbu36XWz2K%0AOO0d5swy2Nlwoq6gRLYEh19c2Ok%3D%0A)
 
 **BTC/ETH Moon Parameter Introduction**
 
@@ -51,7 +49,7 @@ _
 
 - **Grid annualized **=[(Grid profit/investment)/(Lasting time/365)]*100%
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177938861/6db15b3be504a42f85464e731fce/14959552164879?expires=1776232800&signature=c24480daab460ed2227b05b3776bfe52a6bf9796612c8d95ef63eeba05aff8d8&req=diEgEcB9lYlZWPMW3nq%2BgeYTCwUj9K2ey5jX8ra6lVxKGmU7ip6WFaX6Q33X%0AjenSG1oDk1k5PSwh8tPs7BFoeeg%3D%0A)
 
 The core advantage of BTC/ETH Moon is its money-making effect. It will not let go of any fluctuations in the market and will continue to carry out arbitrage. You can enjoy stable arbitrage and trend profits brought by rising currency prices, which suit everyone.
 

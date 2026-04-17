@@ -3,7 +3,9 @@ dotenvConfig({ override: true });
 import express from "express";
 import axios from "axios";
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
+import OpenAI from "openai";
 import { TOOL_DEFINITIONS, executeToolCall } from "./tools.js";
+import { findTopFaqs, scoreDocsBySimilarity } from "./embeddings.js";
 import { startFaqUpdateScheduler, listPendingSuggestions, approveSuggestions, confirmSuggestions, cancelSuggestions, editSuggestion, rejectSuggestions, listAwaitingConfirm } from "./faq-updater.js";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -29,7 +31,10 @@ const env = {
   intercomApiVersion: process.env.INTERCOM_API_VERSION || "2.14",
   intercomWebhookSecret: process.env.INTERCOM_WEBHOOK_SECRET || "",
   awsRegion: process.env.AWS_REGION || "us-east-1",
+  aiProvider: (process.env.AI_PROVIDER || "bedrock").trim().toLowerCase(),
   aiModel: process.env.AI_MODEL || "anthropic.claude-haiku-4-5-20251001",
+  openaiApiKey: process.env.OPENAI_API_KEY || "",
+  openaiModel: process.env.OPENAI_MODEL || "gpt-4o-mini",
   aiSystemPrompt: process.env.AI_SYSTEM_PROMPT || "",
   documentPaths: parseCsv(process.env.DOCUMENT_PATHS) || [],
   knowledgeDocsDir: resolveProjectPath(process.env.KNOWLEDGE_DOCS_DIR || "./data/docs"),
@@ -71,8 +76,12 @@ app.use(express.json({ limit: "1mb" }));
 
 const anthropicClient = new AnthropicBedrock({
   awsRegion: env.awsRegion,
-  timeout: 30000 // 30s timeout
+  timeout: 60000 // 60s timeout
 });
+
+const openaiClient = env.aiProvider === "openai"
+  ? new OpenAI({ apiKey: env.openaiApiKey, timeout: 60000 })
+  : null;
 
 const intercomClient = axios.create({
   baseURL: env.intercomApiBaseUrl,
@@ -202,6 +211,82 @@ function clearConversationHistory(chatId) {
 // ---------------------------------------------------------------------------
 
 // ---------------------------------------------------------------------------
+// Intercom — create contact + conversation on handoff
+// ---------------------------------------------------------------------------
+
+async function createIntercomHandoffConversation({ message, userText, historyText, intent }) {
+  if (!env.intercomAccessToken) {
+    console.log("[intercom] no access token configured, skipping");
+    return null;
+  }
+
+  const telegramUser = message.from || {};
+  const userName = [telegramUser.first_name, telegramUser.last_name].filter(Boolean).join(" ") || "Telegram User";
+  const externalId = `telegram_${message.chat.id}`;
+  const headers = {
+    Authorization: `Bearer ${env.intercomAccessToken}`,
+    "Content-Type": "application/json",
+    "Intercom-Version": env.intercomApiVersion
+  };
+
+  // Create or update contact
+  let contactId;
+  const fakeEmail = `telegram_${message.chat.id}@webot.telegram`;
+  try {
+    const upsertRes = await axios.post(
+      `${env.intercomApiBaseUrl}/contacts`,
+      { role: "user", external_id: externalId, name: userName, email: fakeEmail },
+      { headers }
+    );
+    contactId = upsertRes.data?.id;
+  } catch (err) {
+    // Contact may already exist — try to find by external_id
+    try {
+      const searchRes = await axios.post(
+        `${env.intercomApiBaseUrl}/contacts/search`,
+        { query: { field: "external_id", operator: "=", value: externalId } },
+        { headers }
+      );
+      contactId = searchRes.data?.data?.[0]?.id;
+    } catch (e) {
+      console.error("[intercom] failed to find/create contact:", e.response?.data || e.message);
+      return null;
+    }
+  }
+
+  if (!contactId) {
+    console.error("[intercom] could not resolve contact ID");
+    return null;
+  }
+
+  // Create conversation
+  const body = [
+    `Source: Telegram`,
+    `User: ${userName} (chat_id: ${message.chat.id})`,
+    `Reason: ${intent === "user_requested" ? "User requested human agent" : "AI could not resolve"}`,
+    ``,
+    `User's message: "${userText}"`,
+    ``,
+    `Recent conversation:`,
+    historyText
+  ].join("\n");
+
+  try {
+    const msgRes = await axios.post(
+      `${env.intercomApiBaseUrl}/messages`,
+      { message_type: "inapp", body, from: { type: "user", id: contactId } },
+      { headers }
+    );
+    const convoId = msgRes.data?.id;
+    console.log(`[intercom] created handoff conversation ${convoId} for contact ${contactId}`);
+    return convoId;
+  } catch (err) {
+    console.error("[intercom] failed to create handoff conversation:", err.response?.data || err.message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Agent notification — sends handoff alert to all configured agent chats
 // ---------------------------------------------------------------------------
 
@@ -220,6 +305,24 @@ async function notifyAgents({ message, userText, intent }) {
     : "(no prior history)";
 
   session.lastMessage = userText;
+
+  // Create Intercom conversation and save mapping so follow-up messages get forwarded
+  createIntercomHandoffConversation({ message, userText, historyText, intent }).then(async (convoId) => {
+    if (!convoId) return;
+    const contact = await getOrCreateIntercomContact(message.from).catch(() => null);
+    await upsertMapping({
+      telegramChatId: String(message.chat.id),
+      telegramUserId: String(message.from?.id || message.chat.id),
+      telegramUsername: message.from?.username || "",
+      telegramName: buildTelegramDisplayName(message.from),
+      intercomContactId: contact?.id,
+      intercomConversationId: String(convoId),
+      lastInboundText: userText,
+      lastActivityAt: new Date().toISOString(),
+      status: "handoff_requested"
+    });
+    console.log(`[intercom] saved mapping chatId=${message.chat.id} → convoId=${convoId}`);
+  }).catch((e) => console.error("[intercom] background error:", e.message));
 
   const notification = [
     `🎫 New Ticket [#${session.ref}] — OPEN`,
@@ -319,6 +422,22 @@ async function handleAgentCommand(agentChatId, text, from = null) {
     return;
   }
 
+  // RESOLVE ALL — close every open ticket
+  if (upper === "RESOLVE ALL") {
+    if (handoffSessions.size === 0) {
+      await sendAgentMessage(agentChatId, "No active tickets to close.");
+      return;
+    }
+    const sessions = [...handoffSessions.values()];
+    await Promise.allSettled(sessions.map(async (s) => {
+      closeHandoffSession(s.ref);
+      await sendTelegramMessage(s.userChatId, "Your support session has ended. Thank you for contacting Webot support. Feel free to ask if you have more questions!");
+      await closeIntercomConversation(s.userChatId);
+    }));
+    await sendAgentMessage(agentChatId, `Closed ${sessions.length} ticket(s): ${sessions.map(s => "#" + s.ref).join(", ")}`);
+    return;
+  }
+
   // RESOLVE [#REF]
   if (upper.startsWith("RESOLVE")) {
     const refMatch = cmd.match(/RESOLVE\s+#?([A-Z0-9]{4})/i);
@@ -333,6 +452,7 @@ async function handleAgentCommand(agentChatId, text, from = null) {
     }
     closeHandoffSession(session.ref);
     await sendTelegramMessage(session.userChatId, "Your support session has ended. Thank you for contacting Webot support. Feel free to ask if you have more questions!");
+    await closeIntercomConversation(session.userChatId);
     await sendAgentMessage(agentChatId, `Session #${session.ref} resolved.`);
     return;
   }
@@ -536,6 +656,20 @@ async function forwardUserMessageToAgent(session, userText) {
       agentBotClient.post("/sendMessage", { chat_id: chatId, text: notification })
     )
   );
+
+  // Also forward to Intercom if we have a saved conversation
+  if (env.intercomAccessToken) {
+    try {
+      const store = await readStore();
+      const mapping = store.byTelegramChatId?.[String(session.userChatId)];
+      if (mapping?.intercomConversationId && mapping?.intercomContactId) {
+        await replyToIntercomConversation(mapping.intercomConversationId, mapping.intercomContactId, userText);
+        console.log(`[intercom] forwarded follow-up to convo ${mapping.intercomConversationId}`);
+      }
+    } catch (e) {
+      console.error("[intercom] failed to forward follow-up:", e.message);
+    }
+  }
 }
 
 async function logGap({ userText, intent, hadPartialFaqMatch }) {
@@ -629,8 +763,15 @@ app.post("/webhooks/telegram", async (req, res) => {
 
     if (env.mode === "ai") {
       const messageWithStrippedText = { ...message, text: userText };
-      const reply = await buildAiReply(messageWithStrippedText);
-      await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
+      const isMentioned = inGroup && isBotMentioned(message);
+      const reply = await buildAiReply(messageWithStrippedText, inGroup, isMentioned);
+      if (reply.intent === "ignore") {
+        res.status(200).json({ ok: true, mode: env.mode, intent: reply.intent });
+        return;
+      }
+      if (!reply.skipSend) {
+        await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
+      }
       await upsertMapping({
         telegramChatId: String(message.chat.id),
         telegramUserId: String(message.from.id),
@@ -892,7 +1033,7 @@ async function ensureKnowledgeBase() {
   const seed = {
     businessName: "Webot (formerly Pionex.US)",
     summary: "Webot (formerly Pionex.US) is a US-based cryptocurrency trading platform offering automated trading bots, spot trading, and portfolio management tools.",
-    handoffContact: "@pionexusTestSupportBot",
+    handoffContact: "@webot_cs_bot",
     faqs: []
   };
 
@@ -979,6 +1120,28 @@ async function getIntercomConversation(conversationId) {
   return response.data;
 }
 
+async function closeIntercomConversation(telegramChatId) {
+  if (!env.intercomAccessToken) return;
+  try {
+    const store = await readStore();
+    const mapping = store.byTelegramChatId?.[String(telegramChatId)];
+    if (!mapping?.intercomConversationId) return;
+    const headers = {
+      Authorization: `Bearer ${env.intercomAccessToken}`,
+      "Content-Type": "application/json",
+      "Intercom-Version": env.intercomApiVersion
+    };
+    await axios.post(
+      `${env.intercomApiBaseUrl}/conversations/${mapping.intercomConversationId}/parts`,
+      { message_type: "close", type: "admin", admin_id: "255522" },
+      { headers }
+    );
+    console.log(`[intercom] closed conversation ${mapping.intercomConversationId}`);
+  } catch (e) {
+    console.error("[intercom] failed to close conversation:", e.response?.data || e.message);
+  }
+}
+
 function extractConversationId(payload) {
   const directConversationId = payload?.type === "conversation" ? payload.id : null;
   const value =
@@ -1052,12 +1215,18 @@ function decodeHtmlEntities(text) {
 }
 
 function stripMarkdown(text) {
-  // Preserve code blocks — extract, strip other markdown, reinsert
+  // Preserve code blocks and URLs before stripping markdown (underscores in URLs must not be treated as italic)
   const codeBlocks = [];
-  const withPlaceholders = text.replace(/```[\s\S]*?```/g, (m) => {
-    codeBlocks.push(m);
-    return `\x00CB${codeBlocks.length - 1}\x00`;
-  });
+  const urls = [];
+  const withPlaceholders = text
+    .replace(/```[\s\S]*?```/g, (m) => {
+      codeBlocks.push(m);
+      return `\x00CB${codeBlocks.length - 1}\x00`;
+    })
+    .replace(/https?:\/\/[^\s)>\]"]+/g, (m) => {
+      urls.push(m);
+      return `\x00URL${urls.length - 1}\x00`;
+    });
   const stripped = withPlaceholders
     .replace(/\*\*(.+?)\*\*/g, "$1")
     .replace(/\*(.+?)\*/g, "$1")
@@ -1067,7 +1236,15 @@ function stripMarkdown(text) {
     .replace(/^#+\s+/gm, "")
     .replace(/^\s*[-*]\s+/gm, "• ")
     .trim();
-  return stripped.replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[Number(i)]);
+  return stripped
+    .replace(/\x00URL(\d+)\x00/g, (_, i) => urls[Number(i)])
+    .replace(/\x00CB(\d+)\x00/g, (_, i) => codeBlocks[Number(i)]);
+}
+
+async function sendTyping(chatId) {
+  try {
+    await telegramClient.post("/sendChatAction", { chat_id: chatId, action: "typing" });
+  } catch { /* non-critical */ }
 }
 
 async function sendTelegramMessage(chatId, text, replyToMessageId) {
@@ -1446,18 +1623,38 @@ async function processTelegramUpdate(update) {
   console.log(`[user-msg] from chatId=${chatId}: ${userText}`);
 
   if (env.mode === "ai") {
+    await sendTyping(chatId);
+    const typingInterval = !inGroup ? setInterval(() => sendTyping(chatId), 4000) : null;
     const messageWithStrippedText = { ...message, text: userText };
-    const reply = await buildAiReply(messageWithStrippedText, inGroup);
-    // In group chats, silently ignore if no relevant answer found
-    if (inGroup && reply.intent === "ignore") return;
+    const isMentioned = inGroup && isBotMentioned(message);
+    const reply = await buildAiReply(messageWithStrippedText, inGroup, isMentioned);
+    clearInterval(typingInterval);
+    // Silently ignore unrelated or unanswerable messages
+    if (reply.intent === "ignore") return;
     // Skip sending if already sent with keyboard (e.g. /start in private chat)
     if (!reply.skipSend) {
       await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
     }
     // Send tutorial images if the matched FAQ has any
+    let faqHadImages = false;
     if (reply.faqId) {
       const kb = await loadKnowledgeBase();
+      const faq = (kb.faqs || []).find((f) => f.id === reply.faqId);
+      faqHadImages = !!(faq?.images?.length);
       await sendFaqImages(message.chat.id, reply.faqId, kb.faqs || []);
+    }
+    // Only send doc images if the FAQ didn't already send its own images
+    if (!faqHadImages && reply.imageUrls?.length) {
+      const imgCache = await loadImageCache();
+      for (const url of reply.imageUrls) {
+        const photo = imgCache[url] || url; // use file_id if cached, else raw URL
+        if (!photo) continue; // null means previously failed
+        try {
+          await telegramClient.post("/sendPhoto", { chat_id: message.chat.id, photo });
+        } catch (err) {
+          console.error("[doc-image] failed to send:", err.message);
+        }
+      }
     }
     await upsertMapping({
       telegramChatId: String(message.chat.id),
@@ -1505,15 +1702,19 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function buildAiReply(message, inGroup = false) {
+async function buildAiReply(message, inGroup = false, isMentioned = false) {
   const userText = message.text.trim();
   const chatId = message.chat.id;
   const userName = buildTelegramDisplayName(message.from);
   const lang = detectLanguage("", message.text || "");
   const knowledgeBase = await loadKnowledgeBase();
+  // In groups each user gets their own history so context doesn't bleed between users
+  const historyKey = inGroup
+    ? `${chatId}_${message.from?.id}`
+    : String(chatId);
 
   if (isStartCommand(userText)) {
-    clearConversationHistory(chatId);
+    clearConversationHistory(historyKey);
     const welcomeText = buildWelcomeMessage(knowledgeBase, lang);
     if (!inGroup) {
       await sendWithKeyboard(chatId, welcomeText, buildHomeKeyboard());
@@ -1527,35 +1728,33 @@ async function buildAiReply(message, inGroup = false) {
     return { intent: "chatid", text: `Your chat ID is: ${chatId}` };
   }
 
-  if (shouldHandoff(userText)) {
-    console.log(`[handoff] triggered by: "${userText}"`);
-    if (inGroup) {
-      const reply = { intent: "handoff", text: buildGroupHandoffMessage(lang) };
-      await logConversation({ chatId, userName, userText, botReply: reply.text, intent: reply.intent, inGroup, lang });
-      return reply;
-    }
-    const handoffReply = { intent: "handoff", text: buildHandoffMessage(lang) };
-    await notifyAgents({ message, userText, intent: "user_requested" });
-    await logGap({ userText, intent: "handoff", hadPartialFaqMatch: false });
-    await logConversation({ chatId, userName, userText, botReply: handoffReply.text, intent: "handoff", inGroup, lang });
-    clearConversationHistory(chatId);
-    return handoffReply;
+  // Pre-filter: ignore greetings/chit-chat before calling AI
+  if (isIgnorableMessage(userText, inGroup)) {
+    return { intent: "ignore", text: "" };
+  }
+
+  if (shouldRequestHumanHandoff(userText)) {
+    return {
+      intent: "handoff",
+      handoffReason: "user_requested",
+      text: buildHandoffMessage(lang)
+    };
   }
 
   const matchedFaq = findBestFaqMatch(userText, knowledgeBase.faqs || []);
-  const aiReply = await generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq, lang, inGroup });
+  const aiReply = await generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup });
 
   if (["handoff", "fallback"].includes(aiReply.intent)) {
-    if (!inGroup) {
-      await notifyAgents({ message, userText, intent: aiReply.intent });
-    }
-    // Always log gaps — group or private — so FAQ updater can learn from them
-    await logGap({ userText, intent: aiReply.intent, hadPartialFaqMatch: !!matchedFaq });
     if (inGroup) {
-      const reply = { intent: "handoff", text: buildGroupHandoffMessage(lang) };
-      await logConversation({ chatId, userName, userText, botReply: reply.text, intent: reply.intent, inGroup, lang });
-      return reply;
+      await logGap({ userText, intent: aiReply.intent, hadPartialFaqMatch: !!matchedFaq });
+      // In group: only handoff if bot was directly mentioned, otherwise stay silent
+      if (!isMentioned) return { intent: "ignore", text: "" };
+      const lang = detectLanguage("", userText);
+      await notifyAgents({ message, userText, intent: aiReply.handoffReason || aiReply.intent });
+      return { intent: "handoff", text: buildHandoffMessage(lang) };
     }
+    await notifyAgents({ message, userText, intent: aiReply.handoffReason || aiReply.intent });
+    await logGap({ userText, intent: aiReply.intent, hadPartialFaqMatch: !!matchedFaq });
   }
 
   // Log all messages except ignored ones in group chat (casual chat, off-topic)
@@ -1571,8 +1770,20 @@ async function buildAiReply(message, inGroup = false) {
     });
   }
 
-  appendConversationHistory(chatId, userText, aiReply.text, aiReply.intent);
+  appendConversationHistory(historyKey, userText, aiReply.text, aiReply.intent);
   return aiReply;
+}
+
+let imageCacheData = null;
+async function loadImageCache() {
+  if (imageCacheData) return imageCacheData;
+  try {
+    const raw = await fs.readFile(resolveProjectPath("./data/image-cache.json"), "utf8");
+    imageCacheData = JSON.parse(raw);
+  } catch {
+    imageCacheData = {};
+  }
+  return imageCacheData;
 }
 
 async function loadKnowledgeBase() {
@@ -1615,9 +1826,14 @@ function buildWelcomeMessage(knowledgeBase, lang) {
   ].join("\n");
 }
 
-function shouldHandoff(text) {
-  const normalized = text.trim().toLowerCase();
-  return env.handoffKeywords.some((keyword) => normalized.includes(String(keyword).toLowerCase()));
+const GREETING_PATTERNS = /^(hi+|hey+|hello|helo|hola|yo|sup|howdy|greetings|good\s?(morning|afternoon|evening|night|day)|thanks?|thank\s?you|thx|ty|ok|okay|k|lol|haha|hehe|nice|cool|great|awesome|👍|🙏|😊|😀|😁|🤙|✌️|👋|🫡|😂|🤣)[!?.]*$/i;
+
+function isIgnorableMessage(text, inGroup) {
+  if (!inGroup) return false;
+  const t = text.trim();
+  if (t.length <= 3) return true;
+  if (GREETING_PATTERNS.test(t)) return true;
+  return false;
 }
 
 function detectLanguage(languageCode, messageText = "") {
@@ -1626,25 +1842,41 @@ function detectLanguage(languageCode, messageText = "") {
   return "en"; // default to English
 }
 
+function buildFallbackMessage(lang) {
+  if (process.env.FALLBACK_TEXT) {
+    return env.fallbackText;
+  }
+  if (lang === "zh") {
+    return "抱歉，我暂时没有足够信息回答这个问题。你可以换个问法，或者我可以帮你转人工。";
+  }
+  return env.fallbackText;
+}
+
 function buildLanguageInstruction(lang) {
   if (lang === "en") return "Respond in English.";
   if (lang === "zh") return "Respond in Chinese (Simplified).";
   return `Respond in the user's language (language code: ${lang}).`;
 }
 
-function buildGroupHandoffMessage(lang) {
-  const botLink = botUsername ? `@${botUsername}` : "our support bot";
-  if (lang === "en") {
-    return `To connect with a human agent, please click ${botLink} and send me a private message. Our support team will follow up with you there.`;
+function buildHandoffMessage(lang) {
+  const supportLink = "https://t.me/webot_cs_bot";
+  if (process.env.HUMAN_HANDOFF_TEXT) {
+    const custom = env.humanHandoffText;
+    if (custom.includes("http://") || custom.includes("https://")) return custom;
+    return `${custom} ${supportLink}`.trim();
   }
-  return `如需人工客服，请点击 ${botLink} 向我发起私聊，我们的客服人员会在私聊中为您跟进。`;
+  return lang === "zh"
+    ? `我们将为您提供人工客服服务，请点击以下链接联系我们的客服人员：${supportLink}`
+    : `We'll have a human agent assist you. Please click the link below to reach our support team: ${supportLink}`;
 }
 
-function buildHandoffMessage(lang) {
-  if (lang === "en") {
-    return "Your request has been passed to a human agent. We'll follow up as soon as possible. If it's urgent, please hold on — our team will reach out to you shortly.";
-  }
-  return "您的请求已转至人工客服，我们会尽快跟进。如需紧急协助，请稍候，客服人员将主动联系您。";
+function shouldRequestHumanHandoff(userText) {
+  const normalized = normalizeForSearch(userText);
+  if (!normalized) return false;
+  return env.handoffKeywords.some((keyword) => {
+    const normalizedKeyword = normalizeForSearch(keyword);
+    return normalizedKeyword && normalized.includes(normalizedKeyword);
+  });
 }
 
 function findBestFaqMatch(userText, faqs) {
@@ -1701,13 +1933,13 @@ function hasAnyTokenOverlap(left, right) {
 // ---------------------------------------------------------------------------
 
 const CATEGORY_SIGNALS = {
-  "account":       ["password", "login", "sign in", "sign up", "register", "2fa", "authenticator", "kyc", "verify", "verification", "identity", "account", "email", "密码", "登录", "注册", "认证", "实名"],
-  "deposits":      ["deposit", "fund", "top up", "add money", "ach", "wire", "debit card", "bank", "pending", "hold", "3ds", "3d secure", "充值", "入金", "转入", "银行", "待处理"],
-  "withdrawals":   ["withdraw", "withdrawal", "send", "transfer out", "cash out", "txid", "transaction", "提现", "出金", "转出", "提币", "取款"],
-  "trading-bots":  ["bot", "grid", "martingale", "dca", "twap", "rebalancing", "smart trade", "moon bot", "机器人", "网格", "定投", "再平衡"],
-  "crypto-assets": ["fee", "fees", "listed", "listing", "coin", "token", "network", "erc20", "trc20", "bep20", "solana", "手续费", "上架", "币种", "网络"],
-  "security":      ["scam", "fraud", "hack", "phishing", "stolen", "suspicious", "fake", "诈骗", "被骗", "欺诈"],
-  "platform":      ["webot", "pionex", "about", "what is", "upgrade", "rebrand", "migration", "平台", "介绍"]
+  "account":       ["password", "login", "log in", "sign in", "sign up", "register", "2fa", "two factor", "authenticator", "google auth", "kyc", "verify", "verification", "identity", "account", "email", "reset", "locked out", "can't access", "密码", "登录", "注册", "认证", "实名"],
+  "deposits":      ["deposit", "fund", "funds", "top up", "add money", "ach", "wire", "debit card", "bank", "pending", "hold", "holding", "3ds", "3d secure", "hasn't arrived", "not arrived", "not received", "not showing", "not credited", "didn't receive", "missing", "where is my", "never showed", "still waiting", "took too long", "how long", "delayed", "stuck", "충值", "入金", "转入", "银行", "待处理", "没到账", "没收到"],
+  "withdrawals":   ["withdraw", "withdrawal", "send", "transfer out", "cash out", "txid", "transaction id", "hash", "can't withdraw", "unable to withdraw", "withdrawal failed", "withdrawal pending", "withdrawal missing", "提现", "出金", "转出", "提币", "取款", "无法提现"],
+  "trading-bots":  ["bot", "grid", "martingale", "dca", "twap", "rebalancing", "smart trade", "moon bot", "running bot", "stop bot", "bot profit", "bot loss", "机器人", "网格", "定投", "再平衡"],
+  "crypto-assets": ["fee", "fees", "listed", "listing", "coin", "token", "network", "erc20", "trc20", "bep20", "solana", "supported", "which coins", "what coins", "手续费", "上架", "币种", "网络"],
+  "security":      ["scam", "fraud", "hack", "hacked", "phishing", "stolen", "suspicious", "fake", "unauthorized", "诈骗", "被骗", "欺诈"],
+  "platform":      ["webot", "pionex", "about", "what is", "upgrade", "rebrand", "migration", "difference", "平台", "介绍"]
 };
 
 const ALWAYS_INCLUDE = ["what-is-webot", "human-support"];
@@ -1761,10 +1993,72 @@ function selectFaqsForContext(userText, faqs) {
   return result;
 }
 
-async function generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq, lang, inGroup = false }) {
+// ---------------------------------------------------------------------------
+// Shared helpers for AI response parsing
+// ---------------------------------------------------------------------------
+
+function toOpenAiTools(toolDefs) {
+  return toolDefs.map((t) => ({
+    type: "function",
+    function: { name: t.name, description: t.description, parameters: t.input_schema }
+  }));
+}
+
+function parseAiJsonResponse(raw, matchedFaq, matchedDocuments, lang) {
+  // Find all JSON object candidates and use the last valid one
+  const jsonCandidates = [...raw.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]);
+  let parsed = null;
+  for (const candidate of jsonCandidates) {
+    try { parsed = JSON.parse(candidate); } catch { /* skip */ }
+  }
+  if (!parsed) {
+    const greedyMatch = raw.match(/\{[\s\S]*\}/);
+    try { parsed = JSON.parse(greedyMatch?.[0] || "{}"); } catch {
+      return { intent: "answer", text: raw.replace(/\{[\s\S]*\}/g, "").trim() || raw.trim() };
+    }
+  }
+  const replyText = String(parsed.reply || "").trim();
+  const intent = parsed.intent === "handoff" ? "handoff"
+    : parsed.intent === "ignore" ? "ignore"
+    : "answer";
+  if (intent === "ignore") return { intent: "ignore", text: "" };
+  if (!replyText) {
+    return { intent: "answer", text: buildFallbackMessage(lang) };
+  }
+  const docImageUrls = intent === "answer" ? (matchedDocuments[0]?.imageUrls || []) : [];
+  return {
+    intent,
+    faqId: matchedFaq?.id || null,
+    imageUrls: docImageUrls,
+    text: replyText
+  };
+}
+
+// Detect queries about a specific coin (listing / deposit / withdrawal availability)
+// For these, we skip FAQ context so the AI is forced to call webot_check_pair
+const COIN_QUERY_RE = /\b(listed|listing|available|supported|deposit|withdraw|trade|buy|sell)\b/i;
+function isCoinQuery(text) {
+  if (!COIN_QUERY_RE.test(text)) return false;
+  // Must also contain what looks like a coin ticker (2-10 uppercase-ish letters) or a coin name
+  return /\b[A-Z]{2,10}\b/.test(text) || /\b(coin|token|crypto)\b/i.test(text);
+}
+
+async function generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup = false }) {
   const matchedDocuments = await findRelevantDocuments(userText);
-  const selectedFaqs = selectFaqsForContext(userText, knowledgeBase.faqs || []);
-  const faqContext = selectedFaqs
+  const coinQuery = isCoinQuery(userText);
+
+  // For coin listing/availability queries skip FAQ context entirely — forces AI to call the tool
+  let relevantFaqs = [];
+  if (!coinQuery) {
+    const allFaqs = knowledgeBase.faqs || [];
+    try {
+      relevantFaqs = await findTopFaqs(userText, allFaqs, 10);
+    } catch (err) {
+      console.error("[embeddings] falling back to all FAQs:", err.message);
+      relevantFaqs = allFaqs;
+    }
+  }
+  const faqContext = relevantFaqs
     .map((item) => `Q: ${item.question}\nA: ${item.answer}`)
     .join("\n\n");
   const documentContext = matchedDocuments
@@ -1777,13 +2071,14 @@ async function generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq,
       "You are a concise Telegram AI customer support agent.",
       languageInstruction,
       "Only answer based on the provided business summary and FAQ context.",
-      "If the answer is not supported by the provided context, say you need a human teammate to follow up.",
+      "If the question is completely unrelated to the business (e.g. general knowledge, news, weather, other companies), set intent to 'ignore' and reply to empty string — do not reply at all.",
+      "If the question is about the business but you cannot answer it from the provided context, set intent to 'handoff'.",
       "Do not invent prices, policies, or guarantees.",
-      'Always respond with JSON: {"intent": "answer" or "handoff", "reply": "<your reply>"}.'
+      'Always respond with JSON: {"intent": "answer", "handoff", or "ignore", "reply": "<your reply or empty string>"}.'
     ].join(" ");
 
   const groupInstruction = inGroup
-    ? "\nGROUP CHAT MODE: You are in a public support group. Only respond if the message is clearly a support question about Webot products or services. If the message is a greeting, casual chat, off-topic, or not a support question, set intent to 'ignore' and reply to empty string. Do not respond to every message."
+    ? "\nGROUP CHAT MODE: You are in a public Webot support group. ONLY respond if the message is a clear question or request about Webot's products, features, fees, account, deposits, withdrawals, or trading bots. Set intent to 'ignore' and reply to empty string for ALL of the following: greetings (hi, hello, hey, good morning, etc.), one-word messages, thank-you messages, casual conversation, emojis only, price speculation, news, or anything unrelated to Webot support. When you cannot answer, suggest the user contact a human agent. Do not respond to every message — only genuine support questions."
     : "";
 
   const systemPrompt = [
@@ -1791,16 +2086,72 @@ async function generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq,
     groupInstruction,
     `\nBusiness: ${knowledgeBase.businessName || "Unknown business"}`,
     `Summary: ${knowledgeBase.summary || ""}`,
-    `Human handoff contact: ${knowledgeBase.handoffContact || "@support"}`,
-    matchedFaq ? `\nTop FAQ match:\nQ: ${matchedFaq.question}\nA: ${matchedFaq.answer}` : "",
     faqContext ? `\nFAQ context:\n${faqContext}` : "",
     documentContext ? `\nDocument context:\n${documentContext}` : ""
   ].filter(Boolean).join("\n");
 
-  const history = getConversationHistory(chatId);
-  const messages = [...history, { role: "user", content: userText }];
+  const history = getConversationHistory(historyKey);
   const MAX_TURNS = 8;
 
+  // ---------------------------------------------------------------------------
+  // OpenAI path
+  // ---------------------------------------------------------------------------
+  if (env.aiProvider === "openai") {
+    const activeTools = toOpenAiTools(TOOL_DEFINITIONS.filter((t) =>
+      !(t.name.startsWith("superset_") && !process.env.SUPERSET_BASE_URL)
+    ));
+    const messages = [
+      { role: "system", content: systemPrompt },
+      ...history,
+      { role: "user", content: userText }
+    ];
+    try {
+      for (let turn = 0; turn < MAX_TURNS; turn++) {
+        console.log(`[ai] calling openai model=${env.openaiModel} turn=${turn}`);
+        const response = await openaiClient.chat.completions.create({
+          model: env.openaiModel,
+          max_completion_tokens: 2048,
+          messages,
+          tools: activeTools.length ? activeTools : undefined,
+          tool_choice: activeTools.length ? "auto" : undefined
+        });
+        const choice = response.choices[0];
+        messages.push(choice.message);
+
+        if (choice.finish_reason === "tool_calls") {
+          const toolCalls = choice.message.tool_calls || [];
+          console.log("Tool calls:", toolCalls.map((tc) => tc.function.name).join(", "));
+          const toolResults = await Promise.all(
+            toolCalls.map(async (tc) => {
+              const input = JSON.parse(tc.function.arguments);
+              const result = await executeToolCall({ id: tc.id, name: tc.function.name, input });
+              return { role: "tool", tool_call_id: tc.id, content: result.content };
+            })
+          );
+          messages.push(...toolResults);
+          continue;
+        }
+
+        if (choice.finish_reason === "stop") {
+          return parseAiJsonResponse(choice.message.content || "{}", matchedFaq, matchedDocuments, lang);
+        }
+
+        break;
+      }
+      throw new Error("OpenAI agentic loop exceeded max turns.");
+    } catch (error) {
+      console.error("AI generation error (openai)", formatError(error));
+      if (matchedFaq) {
+        return { intent: "faq", text: matchedFaq.answer };
+      }
+      return { intent: "handoff", text: buildFallbackMessage(lang) };
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bedrock / Claude path (AI_PROVIDER=bedrock, default)
+  // ---------------------------------------------------------------------------
+  const messages = [...history, { role: "user", content: userText }];
   try {
     for (let turn = 0; turn < MAX_TURNS; turn++) {
       console.log(`[ai] calling bedrock model=${env.aiModel} turn=${turn}`);
@@ -1817,38 +2168,10 @@ async function generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq,
       messages.push({ role: "assistant", content: response.content });
 
       if (response.stop_reason === "end_turn") {
-        const textBlock = response.content.find((b) => b.type === "text");
-        const raw = textBlock?.text || "{}";
-        // Find all JSON object candidates and use the last valid one
-        // (AI sometimes self-corrects by outputting a second JSON block)
-        const jsonCandidates = [...raw.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]);
-        let parsed = null;
-        for (const candidate of jsonCandidates) {
-          try { parsed = JSON.parse(candidate); } catch { /* skip */ }
-        }
-        if (!parsed) {
-          // Fallback: try full greedy match
-          const greedyMatch = raw.match(/\{[\s\S]*\}/);
-          try { parsed = JSON.parse(greedyMatch?.[0] || "{}"); } catch {
-            return { intent: "answer", text: raw.replace(/\{[\s\S]*\}/g, "").trim() || raw.trim() };
-          }
-        }
-        const replyText = String(parsed.reply || "").trim();
-        const intent = parsed.intent === "handoff" ? "handoff"
-          : parsed.intent === "ignore" ? "ignore"
-          : "answer";
-        if (intent === "ignore") return { intent: "ignore", text: "" };
-        if (!replyText) {
-          const fallback = lang === "zh"
-            ? "抱歉，我暂时无法回答这个问题。请换个方式提问，或联系人工客服 @pionexusTestSupportBot。"
-            : "Sorry, I wasn't able to generate a response for that. Please rephrase your question or contact @pionexusTestSupportBot for support.";
-          return { intent: "answer", text: fallback };
-        }
-        return {
-          intent,
-          faqId: matchedFaq?.id || null,
-          text: intent === "handoff" ? `${replyText}\n${buildHandoffMessage("en")}` : replyText
-        };
+        return parseAiJsonResponse(
+          response.content.find((b) => b.type === "text")?.text || "{}",
+          matchedFaq, matchedDocuments, lang
+        );
       }
 
       if (response.stop_reason === "tool_use") {
@@ -1865,12 +2188,10 @@ async function generateAiResponse({ userText, chatId, knowledgeBase, matchedFaq,
     throw new Error("Agentic loop exceeded max turns.");
   } catch (error) {
     console.error("AI generation error", formatError(error));
-
     if (matchedFaq) {
       return { intent: "faq", text: matchedFaq.answer };
     }
-
-    return { intent: "handoff", text: buildHandoffMessage("en") };
+    return { intent: "handoff", text: buildFallbackMessage(lang) };
   }
 }
 
@@ -1884,24 +2205,79 @@ function parseCsv(value) {
     .filter(Boolean);
 }
 
-async function findRelevantDocuments(userText) {
-  const allPaths = await collectDocumentPaths();
-  if (!allPaths.length) return [];
+// Cache all docs in memory after first load
+let docCache = null;
 
+async function loadAllDocs() {
+  if (docCache) return docCache;
+  const allPaths = await collectDocumentPaths();
   const docs = [];
   for (const filePath of allPaths) {
     const loaded = await loadDocument(filePath);
     if (!loaded) continue;
-    const score = scoreDocument(userText, loaded.text);
-    if (score <= 0) continue;
     docs.push({
       path: path.relative(projectRoot, filePath),
-      score,
-      excerpt: buildExcerpt(userText, loaded.text)
+      text: loaded.text,
+      imageUrls: extractImageUrls(loaded.text),
+      kind: classifyDocument(filePath, loaded.text)
     });
   }
+  docCache = docs;
+  console.log(`[docs] loaded ${docs.length} documents into cache`);
+  return docs;
+}
 
-  return docs.sort((a, b) => b.score - a.score).slice(0, 5);
+async function findRelevantDocuments(userText) {
+  const allDocs = await loadAllDocs();
+  if (!allDocs.length) return [];
+
+  const topDocs = rerankDocumentsByFreshnessIntent(
+    userText,
+    await scoreDocsBySimilarity(userText, allDocs, 12)
+  ).slice(0, 5);
+  return topDocs.map((doc) => ({
+    path: doc.path,
+    excerpt: buildExcerpt(userText, doc.text),
+    imageUrls: doc.imageUrls
+  }));
+}
+
+function classifyDocument(filePath, text) {
+  const source = `${path.basename(filePath).toLowerCase()} ${(text || "").slice(0, 300).toLowerCase()}`;
+  if (/\b(listed|is-listed|will-list|trading-pairs?)\b/.test(source)) return "listing";
+  if (/\b(announcement|notice|maintenance|upgrade|suspension|suspend|delist|rebrand)\b/.test(source)) return "announcement";
+  if (/\b(fee|deposit|withdraw|account|kyc|bot|security|support|faq|guide|how-to)\b/.test(source)) return "evergreen";
+  return "general";
+}
+
+function userAskedForTimeSensitiveInfo(userText) {
+  const normalized = normalizeForSearch(userText);
+  return [
+    "announcement",
+    "announcements",
+    "maintenance",
+    "suspended",
+    "suspension",
+    "delist",
+    "delisted",
+    "upgrade",
+    "rebrand",
+    "listing",
+    "listed",
+    "latest",
+    "new pair",
+    "new pairs"
+  ].some((term) => normalized.includes(term));
+}
+
+function rerankDocumentsByFreshnessIntent(userText, docs) {
+  const allowTimeSensitive = userAskedForTimeSensitiveInfo(userText);
+  return docs
+    .filter((doc) => allowTimeSensitive || !["announcement", "listing"].includes(doc.kind))
+    .sort((left, right) => {
+      const rank = { evergreen: 3, general: 2, announcement: 1, listing: 0 };
+      return (rank[right.kind] || 0) - (rank[left.kind] || 0);
+    });
 }
 
 async function collectDocumentPaths() {
@@ -1971,6 +2347,16 @@ function scoreDocument(userText, documentText) {
   }
 
   return score;
+}
+
+function extractImageUrls(text) {
+  const urls = [];
+  const regex = /!\[[^\]]*\]\((https?:\/\/[^)]+)\)/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    urls.push(match[1]);
+  }
+  return urls.slice(0, 3); // max 3 images per doc
 }
 
 function buildExcerpt(userText, documentText) {

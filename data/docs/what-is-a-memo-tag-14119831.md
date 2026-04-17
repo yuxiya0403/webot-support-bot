@@ -41,23 +41,23 @@ While many tokens require a Memo, the following are the most common on Webot:
 
 **APP: **Click** [Deposit] **> **[Receive from exchange/wallet]**. Select your preference token.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2238378238/6be6f9744c813c46c93c8e61a641/image.png?expires=1776232800&signature=7f7d0bebf68f7864f7c1fb0b5d66681d559fb268ad9220afef0ba9e18f932c70&req=diIkHsp5lYNcUfMW3nq%2BgSj2862PhqKvtvRHkeJ4W5MlzmAqEOQbDq0KhE3A%0AyEDGuJA8H98wk1JnciKOiSLDeA4%3D%0A)
 
 **WEB:** Navigate to **[Wallet]** > **[Receive Crypto]**. Select your preference token.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2238398429/007d9db3dcf83ed08d3cf22fc3b9/image.png?expires=1776232800&signature=243cb20c6fcc28e14662fff2a6822846b830d96cb86cfa70bfd3b63caa708532&req=diIkHsp3lYVdUPMW3nq%2BgXocQ3X4herX%2F2ZAFg86Pdu2D9FkDj9IRU2wK5iU%0AEayGGCgkP05G7wzLuOsnPeK0NLA%3D%0A)
 
 **Step 2: Acknowledge the Warning**
 
 If the token requires a Memo/Tag, a safety prompt will appear. You must check the box to acknowledge this requirement before the address is revealed.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2238407547/be7a83d51ba336b69af10da552df/2BF54EC4-63A0-4907-A266-B9A20BA64BD0.jpeg?expires=1776232800&signature=f0765166760a1cbaa96768e4c9be63360e0727c4cf3c23832bc706a907230b95&req=diIkHs1%2BmoRbXvMW3nq%2BgUh%2BeEe7JB7Qh3o4MoQJvcN8oiDUyMLBxBgmgv7n%0AYcm4qf6adtWeJrTM%2BZgecy7Lfak%3D%0A)
 
 **Step 3: Copy and Paste**
 
 You will see two distinct fields: **Deposit Address** and **Deposit Memo/Tag**.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2238413844/005f726d7f7bd594db2155357832/image.png?expires=1776232800&signature=c4ffb28f983fc677d9b3973ce26e1633534183cc9dc340fa618113d6329d010b&req=diIkHs1%2FnolbXfMW3nq%2Bgc6Prnm3A2sH%2BIxG2p20jqcdB8en9i6YI0QOQRsC%0A3gqJPUDvItlf1pNUX44g1YSaYWw%3D%0A)
 
 - Always use the **copy button** to avoid manual typing errors.
 

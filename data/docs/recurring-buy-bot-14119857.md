@@ -20,11 +20,11 @@ How to use Recurring Buy Bot
 
 First, open the [Webot](https://www.webot.com/en-US/) website, and then find the Recurring Buy bot on the left side of the interface.
 
-_
+![](https://static.intercomassets.com/assets/article_broken_image_placeholder.png)
 
 Webot lets you choose one of the following **Investment frequencies** for the Recurring Buy strategy: **10 Min**, **1Hour**, **4Hour** , **6Hour**,**12Hour**, **1Day**, **1Week, **and **1Month**.
 
-_
+![](https://static.intercomassets.com/assets/article_broken_image_placeholder.png)
 
 After you input the **"Investment frequency"** and the** "Investment each time"** for the Recurring Buy Bot, the required “Investment Per Week” will be calculated and listed below. This is the minimum balance needed to start your DCA strategy. Your funds for the whole runtime will be frozen into a DCA Pool, once you start the bot.
 

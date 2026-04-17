@@ -7,7 +7,7 @@ const env = {
   intercomAccessToken: process.env.INTERCOM_ACCESS_TOKEN || "",
   intercomApiBaseUrl: (process.env.INTERCOM_API_BASE_URL || "https://api.intercom.io").replace(/\/$/, ""),
   intercomApiVersion: process.env.INTERCOM_API_VERSION || "2.14",
-  outputDir: path.resolve(process.cwd(), process.env.INTERCOM_EXPORT_DIR || "./exports/intercom"),
+  outputDir: path.resolve(process.cwd(), process.env.INTERCOM_EXPORT_DIR || "./data/docs"),
   includeDrafts: (process.env.INTERCOM_EXPORT_INCLUDE_DRAFTS || "false").toLowerCase() === "true"
 };
 
@@ -38,13 +38,13 @@ async function main() {
   const filteredArticles = env.includeDrafts ? articles : articles.filter((item) => item.state !== "draft");
 
   for (const article of filteredArticles) {
-    const filePath = path.join(env.outputDir, "articles", `${slugify(article.title || article.id)}-${article.id}.md`);
+    const filePath = path.join(env.outputDir, `${slugify(article.title || article.id)}-${article.id}.md`);
     await fs.writeFile(filePath, renderArticleMarkdown(article), "utf8");
   }
 
   for (const page of externalPages) {
     const title = page.title || page.url || page.id;
-    const filePath = path.join(env.outputDir, "external-pages", `${slugify(title)}-${page.id}.md`);
+    const filePath = path.join(env.outputDir, `${slugify(title)}-${page.id}.md`);
     await fs.writeFile(filePath, renderExternalPageMarkdown(page), "utf8");
   }
 
@@ -201,6 +201,7 @@ function htmlToMarkdown(input) {
   return decodeEntities(String(input || ""))
     .replace(/<style[\s\S]*?<\/style>/gi, "")
     .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<img[^>]*src=["']([^"']+)["'][^>]*>/gi, (_match, src) => `![](${src})\n`)
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/p>/gi, "\n\n")
     .replace(/<\/div>/gi, "\n\n")

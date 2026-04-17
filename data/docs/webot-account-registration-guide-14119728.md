@@ -60,7 +60,7 @@ You can easily register for a Webot account with your email address or Apple/Goo
 
 1. Go to the [Webot website](https://www.webot.com/us/en-US) and click **[Register]** in the upper right corner or select a registration method directly. You can sign up with your email address, Apple, or Google account.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182127333/cce687091266966caa24917381ad/15030324504591?expires=1776232800&signature=6d3f2dde784b7c0814c0bf19ee45dc57e3a209ef9f9dc527edc6d38effe72439&req=diEvFMh8moJcWvMW3nq%2BgXrjuLSy2Sp7LcuL7YhPLWyNGCvjCUBTUFk6gRmx%0AuwlBhPkIGSdvRlm8jdZspWpAkTY%3D%0A)
 
 **Sign up with your email address:**
 
@@ -68,11 +68,11 @@ _
 ​
 Then, read and agree to the User Agreement, Privacy Policy, Risk Disclaimer, and User Conduct Code, and click the **[Create Account]** button to continue.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182127328/4f42e6dc70a0d431eaa0bd7cc06d/15030278421263?expires=1776232800&signature=83ca1f8ec49e6b5c0ea825faaadf79144076f103c90c8a759481bd8a5ae4f99d&req=diEvFMh8moJdUfMW3nq%2BgWrYa5Y2MfH4lQ1b7b9cCT02cIJsGbUMsguvGDdE%0AjswqJKqXSVUvrzmch6hfaWwswo4%3D%0A)
 
 3. After completing the slider verification, you will receive a 6-digit verification code in your email. Enter the code within 8 minutes and click the **[Confirm]** button.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182127332/c25218e869d1ddba6493456a1664/15030398042639?expires=1776232800&signature=c76840f07a50833a8a9597fd2bffe785d8e537883e669b0e838bd2234e5255da&req=diEvFMh8moJcW%2FMW3nq%2BgfS4pmPKT3IERq7HSpoULPYXEGCTOvQW2yFiJGYF%0AA70DPfnOqxF0TkffAQyHUi3SZ88%3D%0A)
 
 4. Congratulations! You have successfully created a personal Webot account.
 
@@ -80,7 +80,7 @@ _
 
 2. Select **[Continue with Google]** or **[Continue with Apple]**. A pop-up window will appear, prompting you to sign in to Webot using your Apple or Google account.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182127330/7fcc2fab19e7c019b5c3fc088f20/15030427128975?expires=1776232800&signature=881f6495126c63135a9ce04b309d016b4f465ee9ddfbdbf7b61a0217c32dd38b&req=diEvFMh8moJcWfMW3nq%2BgRgOZi5xfBhAenubv3xBxoC0Z5khmOB2fM2QP4TF%0A2XG%2BqSG8xMntn3TSXb7htKUL%2FBw%3D%0A)
 
 3. After signing in, you will be asked to confirm before proceeding.
 
@@ -88,7 +88,7 @@ _
 
 Then, read and agree to the User Agreement, Privacy Policy, Risk Disclaimer, and User Conduct Code, and click the **[Next step]** button.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182127327/f709fe76a784dbc0d5a053351d03/15030398043535?expires=1776232800&signature=c23baaabff67a657c8b6b1104e4eb926e7632e6cf8d84c4b113596cc66310135&req=diEvFMh8moJdXvMW3nq%2Bgb%2Bnbw%2BRFRzZfH%2Bz60YjUIdmjEIyy3547BMbChcW%0AhEo9CYY2oNmVUUjlm4wuxBoO%2Bhg%3D%0A)
 
 5. Congratulations! You have successfully created a Webot account.
 
@@ -96,7 +96,7 @@ _
 
 1. Download the [Webot application](https://www.webot.com/us/en-US/download) and go to the “Account” click **[Create account]**. You can sign up with your email address, Apple, or Google account.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182141532/b87e2ee656d262d15a8dcfc5fda7/1.png?expires=1776232800&signature=d7660c10ed5d16cd8ceb70fd127e6cc220426af389a3599dc85a01dd3463436c&req=diEvFMh6nIRcW%2FMW3nq%2BgYQk6zegzlvvIncHo%2B%2Fa9tgQKykbEVgwZl7%2F8YLu%0AisF8UbA9B5v%2FDtkGKIJ6LyPD1eM%3D%0A)
 
 **Sign up with your email address:**
 
@@ -106,7 +106,7 @@ _
 
 _By clicking “Confirm,” you are deemed to have agreed to the Terms & Service. Please read them before clicking._
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182142389/1692d196f941ab96a502104d9a5e/2.png?expires=1776232800&signature=e3a712a09ddc6de9c1f2d0e6345bf4fe4be1984f557d7fd9ab53b49ffa262064&req=diEvFMh6n4JXUPMW3nq%2BgWOyPOx7hc6VjyYvGzRAO96ub3TBM6EZ7ce5j6dA%0A2kGbqwzWFUsVltUaiUYyxouFmAM%3D%0A)
 
 4. Congratulations! You have successfully created a personal Webot account.
 
@@ -114,7 +114,7 @@ _
 
 2. Select **[Continue with Google]** or **[Continue with Apple]** to register using your existing account credentials.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182143090/b950ebb9a89f31eecb71e0730a38/3.png?expires=1776232800&signature=996b71724ba06f5fc59706657d60d2b3759814272ba738338e2cfeb8d3badb4f&req=diEvFMh6noFWWfMW3nq%2BgUpCEvPVEqhIs8gIZAuZMRB4RoTqI2NBGYMRXWV9%0AqtynghddK2MMMK32v%2BE38AH%2FGHA%3D%0A)
 
 3. After signing in, you will be asked to confirm before proceeding.
 
@@ -122,7 +122,7 @@ _
 
 _By clicking “Confirm,” you are deemed to have agreed to the Terms & Service. Please read them before clicking._
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2182144013/a430da8295bf7dc8a03f3c20f497/4.png?expires=1776232800&signature=137329013496e5412300a0e9b37111aa6bc5a4ac64f54a46a7e65201cf9d533c&req=diEvFMh6mYFeWvMW3nq%2BgQm9hyIJuDZJfyZ8KGPL8zHXm9%2BWdc7qq1FsLFsc%0AMP80nlk30rQ4GCnUaPHBt2BWsKs%3D%0A)
 
 5. Congratulations! You have successfully created a Webot account.
 

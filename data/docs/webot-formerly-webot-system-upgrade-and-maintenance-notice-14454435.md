@@ -1,0 +1,29 @@
+---
+id: "14454435"
+type: article
+title: "Webot (formerly Webot) System Upgrade and Maintenance Notice"
+state: "published"
+url: "https://intercom.help/webot/en/articles/14454435-webot-formerly-webot-system-upgrade-and-maintenance-notice"
+author_id: 10010181
+created_at: 2026-04-05T06:47:58.000Z
+updated_at: 2026-04-05T07:19:26.000Z
+---
+# Webot (formerly Webot) System Upgrade and Maintenance Notice
+Dear users,
+
+To provide a better user experience, Webot (formerly Webot) will conduct a system upgrade and maintenance on **March 5th, 2026, at 07:00 (UTC)**. During this time, fiat channels, coin purchases, and market data may experience temporary instability.
+
+**Please note:**
+
+- The maintenance is expected to be completed within **20 minutes**.
+
+- To avoid potential asset loss, please manage your positions and control trading risk in advance.
+
+**Risk Warning:**
+
+There are considerable risks in digital currency transactions; please purchase carefully and pay attention to transaction risks. Webot (formerly Webot) will select high-quality currencies but will not be responsible for guarantee, compensation, etc., for any of your transactions.
+
+If you encounter any problems, please get in touch with our customer service in time through the online customer service portal on the WEB or APP side. We appreciate your support of Webot (formerly Webot) all the time!
+
+Webot (formerly Webot) Team
+March 05, 2026

@@ -1,0 +1,12 @@
+---
+id: "192555662"
+type: external_page
+title: "如何透過銀行帳戶（ACH）入金 – Webot Blog"
+url: "https://blog.webot.com/zh-tw/2025/12/30/ach-deposit-tc/"
+source_id: ""
+created_at: 2026-03-24T23:22:15.000Z
+updated_at: 2026-04-13T10:47:00.000Z
+---
+# 如何透過銀行帳戶（ACH）入金 – Webot Blog
+Source: https://blog.webot.com/zh-tw/2025/12/30/ach-deposit-tc/
+_No content available._

@@ -6,22 +6,20 @@ state: "published"
 url: "https://intercom.help/webot/en/articles/14119845-grid-trading-bot"
 author_id: 10009720
 created_at: 2026-03-19T06:21:40.000Z
-updated_at: 2026-04-06T04:13:17.000Z
+updated_at: 2026-04-08T03:45:57.000Z
 ---
 # Grid Trading Bot
-_
-
 Grid Trading Bots are essential for investors looking to hedge against missed opportunities and the pitfalls of emotional market timing. By automating 'buy low, sell high' orders within a defined range, this strategy neutralizes volatility and transforms price fluctuations into a consistent stream of incremental profits.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177935706/72387b5d7763a3f4da6cc175fb59/48486199254809?expires=1776232800&signature=70c19778baa4a8c044a26b2d54c81fb17b36b9627e31f8b21ba3d0806cbc526c&req=diEgEcB9mIZfX%2FMW3nq%2BgW3vTaIhrxIMF8wFCNiPMaDXBhUDLkkWvfEzrjWg%0AJ8949H9xzmHQbBytlzLNbNfj6M0%3D%0A)
 
 **What Is Grid Trading? How Does Grid Trading Work?**
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177935725/91badc57e3ca059dab6ee5e850a3/48486185802265?expires=1776232800&signature=454c20de1dd658a2a36f20fedd674c8e70e075e46f3a1ec29a969fe95422e8e1&req=diEgEcB9mIZdXPMW3nq%2BgVk2%2BGodpLxOBbmmn%2FVAV0rEoFMAleWJQgam2mat%0A48oQDTa44wBLbVEBHZoqPdThMDQ%3D%0A)
 
 Designed for the 24/7 cryptocurrency market, the Grid Trading Bot executes automated orders based on a strategic price grid. This approach is specifically engineered to eliminate the psychological pressures of trading, ensuring that human error does not interfere with market opportunities. The bot maintains a systematic 'buy low and sell high' workflow, offering traders a reliable way to maintain consistency even during extreme market swings.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177935772/49c81bbf81ccd8c94c80277b44ba/48486199259161?expires=1776232800&signature=629ee5c51f303572c1afed01c8f5af4dd29caddeea4e1fb1204dcdcfd76e61a6&req=diEgEcB9mIZYW%2FMW3nq%2BgUzCqAimLGs3ZSasSz9ZqsEHXABmb0fvEb5W8I22%0ANpjgpdRA%2F%2Bugt1CpNfJAU%2BL236o%3D%0A)
 
 For example, in a BTC/USDT pair with a range between 15,000 and 150,000 USDT, the bot initiates the strategy by purchasing a portion of the asset at market price while simultaneously placing a series of buy and sell orders above and below that level. By consistently executing these trades within the grid, the bot captures incremental profits from market volatility.
 
@@ -35,31 +33,31 @@ Whether you're pursuing short-term gains or long-term growth, Webot simplifies t
 
 **Step 1: **Open the [Webot app](https://www.webot.com/us/en-US/download) and click on **[Bot]** - **[Create]** to access the bot section.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240412170/7d4e41c6dab351fa0e9c0949e76a/image.png?expires=1776232800&signature=0bebebec6bfa1d7ddda8008661fbdbf64ba317128c3b8ad277d571e1f585c4e3&req=diIjFs1%2Fn4BYWfMW3nq%2BgdTNgjCJVWXXfgLTA8mVRmYzOteYZzGAUWZjCe8Z%0Ae%2FnQvqWLsUdvf9frMhcePOIhZU0%3D%0A)
 
 **Step 2: **On the **[All] **page, select **[Grid Trading Bot]**. Choose your desired cryptocurrency pair, select your preferred mode, and click **[Continue]**. 
 
 **Note:** Both Moderate and Aggressive modes utilize AI-generated parameters derived from backtesting data over a specific number of days. Conversely, the Custom mode requires users to manually configure their own parameters.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240424451/e3453abc7bbd4d7e3a337d34d987/image.png?expires=1776232800&signature=b3d62d252108e9a864a51f970dad5f6287e58b4f943d05f68af5dbb7dba98181&req=diIjFs18mYVaWPMW3nq%2BgT%2F%2B%2Fc3%2BOi%2BfdKtNkPXup%2FdRSwk4L%2BwDbKxZFlga%0AFpF4jt4swjY9RUhk8YzzTPyBwl8%3D%0A)
 
 **Step 3: **After selecting a mode, the system will display the minimum investment required. Enter your desired investment amount and click **[Continue]**. A parameter confirmation prompt will appear; click **[OK]** to successfully create the bot.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240429768/feadc059a05ed6ffa2103dda33c7/image.png?expires=1776232800&signature=cc7eebf4c816f54d0e343cd2c80ef3cf15678deb42ca93d77d270f6d01c94205&req=diIjFs18lIZZUfMW3nq%2BgaOis7zmMW6Nsqcwjh%2FzbQG4rethGhA2dfQ7PX6m%0ARnCmT4XSwxOjsEVzuAGU89aJl0M%3D%0A)
 
 **On Web:**
 
 **Step 1: **Log in to your [Webot account](https://www.webot.com/us/en/sign), click on **[Trade]** in the upper menu bar, and then select **[Trading Bot]**.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240433536/0906fac69392d5616ca886b03131/image.png?expires=1776232800&signature=50adc6b78a8bdfdc86b44acd6ea5937d4a1345485db3ec65f68350f600dbdceb&req=diIjFs19noRcX%2FMW3nq%2BgdZ8PJ6Y8pXPcr0AcuCAfOP80XcNsQ%2BoOJTQyP5j%0AmYDDCsaXynp8ziVRAEbCyBXtCOc%3D%0A)
 
 **Step 2: **On the **[Bot]** - **[All]** page, select **[Grid Trading Bot]** and choose your desired cryptocurrency pair. If you wish to replicate an AI strategy, click **[Copy Strategy]**, select your preferred strategy, and click **[Start copying]**.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240434214/369c6afdf3b9f03bc85fce1e2274/image.png?expires=1776232800&signature=4dc674a4bd9d93a8f43b88b91fa8c84d0d870e6a4bebec831cc6ddf826f8303a&req=diIjFs19mYNeXfMW3nq%2BgSOissbcfNgu10yZr7ZJr9SIOZqx1hRtMJwU9SgO%0AfirMBn2NN0WLve%2B7EzqwKXnMwAw%3D%0A)
 
 ​**Step 3: **Once you have selected the strategy you wish to copy, the system will display the minimum investment required. Enter your desired investment amount and click **[Create bot]**. A parameter confirmation prompt will then appear; click **[Continue]** to successfully create the bot.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240454784/a57a9d1fc5bd030ded2313ff9616/image.png?expires=1776232800&signature=ce967b61df1cb59db2aef3617596d82d588415ba2bb9a356e445cf1ed1fdb048&req=diIjFs17mYZXXfMW3nq%2BgQ7vjnMSZt0%2FN2Jq%2FJuBi4jdHEUnouE94LXngvU5%0A3Dx2h4%2BieZakcTGgsaXxHtxmeL4%3D%0A)
 
 **What is the Webot AI Strategy?**
 
@@ -77,19 +75,19 @@ Furthermore, AI 2.0 utilizes advanced predictive modeling to forecast upper and 
 
 The AI 2.0 Strategy analyzes market trends over 7, 30, or 180-day intervals to generate optimized recommendations for grid intervals and maximum drawdown ratios. You can deploy the bot instantly by accepting these data-driven parameters and entering your desired investment amount in USDT. Alternatively, the system offers the flexibility to manually refine these settings, allowing you to align the bot's configuration with your personal market assessment.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240502577/eab246cae7294f0342dbcda01a5c/image.png?expires=1776232800&signature=dd8b91b5d076bfe83123093c40769f03b64c149d34239bd2c7f5365b70466e14&req=diIjFsx%2Bn4RYXvMW3nq%2BgRvjpOHuIMf%2BjrMrgGUhokEHGwcXYnGQiJpVZOut%0AX9zusiqb7kGmvuxGnmSusSlRqS4%3D%0A)
 
 **Customize Your Grid Trading Bot**
 
 To effectively execute a "buy low, sell high" arbitrage strategy, you must first define the core parameters that guide your bot's behavior. In this section, you will configure essential settings—including Price Range (Upper and Lower Limits), Number of Grids, and Total Investment. Setting these precisely allows you to tailor the bot's frequency and depth to your specific market outlook and risk tolerance.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240513044/f83258a41d2570caf012f383987c/image.png?expires=1776232800&signature=c628769010bf282032fc3895a125a3fddab76fa0789427b6423311e4d0ca93d6&req=diIjFsx%2FnoFbXfMW3nq%2BgdBKjHkzsMJ8eDkyzn%2B0uXDU12HtvqKeRg0cOD3K%0Aixc%2FNxcjxKEOWOCIO9nmFV8%2B64c%3D%0A)
 
 **Price Range**
 
 The Upper and Lower Limit Prices define the boundaries within which the bot executes its "buy low, sell high" arbitrage strategy. Once set, the bot automatically places a series of buy and sell limit orders across this range. As long as the market price fluctuates within these limits, the bot will continuously capture profits from market volatility.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936071/6ec61f980041a4dce438d392c132/48486199282073?expires=1776232800&signature=f3f170ca1f01e5f0849f8c87c6a21d8a19db7d172c6e303fd35f15e0153af09b&req=diEgEcB9m4FYWPMW3nq%2BgdHIAdJ7MGKjlinbyu8VbqvyR2B9FdKrhUq2IAef%0Ay6WRLnKeB1Hq0G%2BVaJ0r8QFEWvs%3D%0A)
 
 **Price Exceeds the Range**
 
@@ -109,7 +107,7 @@ The price range is divided into multiple levels, forming a "grid" where the bot 
 
 - **Lower Grid Count:** Decreasing the number of grids results in a higher profit margin per execution, but the bot will trigger fewer trades overall.
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177936094/0f465c8c27923a3a66570487c75c/48486199283609?expires=1776232800&signature=026786b085a1fe3c99b92514cc6d8271aeb49414da83644c68dd5e24c4c73aed&req=diEgEcB9m4FWXfMW3nq%2Bgc4Qnla%2F9pKDPg8IfcBrInoyal62ryC63HjD6y%2Bd%0Ap42JSS%2F%2FgDD8MZ99Fh2tnbi5n5E%3D%0A)
 
 **Total Investment**
 
@@ -117,9 +115,9 @@ The system automatically calculates the minimum investment required for your Gri
 
 **Advanced Settings**
 
-Webot offers sophisticated customization options for Grid Trading through its Advanced Settings, accessible on the manual configuration page. These features—including Trigger Price, Take-Profit Price, Stop-Loss Price, Slippage Control, Grid Mode, Investment Mode, and Trailing Up—allow you to fine-tune your strategy with precision. By utilizing these tools, you can better align the bot’s execution with your specific risk tolerance and market expectations.
+Webot offers sophisticated customization options for Grid Trading through its Advanced Settings, accessible on the manual configuration page. These features—including Trigger Price, Take-Profit Price, Stop-Loss Price, Slippage Control, Grid Mode, and Investment Mode—allow you to fine-tune your strategy with precision. By utilizing these tools, you can better align the bot’s execution with your specific risk tolerance and market expectations.
 
-_
+![](https://downloads.intercomcdn.com/i/o/c6h9pild/2240529249/7b4179bec02f1920df50c0584618/image.png?expires=1776232800&signature=eec37da38fdba825eac4d0a8d83d596d966b2601d1dfca0c941efd4f81c5adf5&req=diIjFsx8lINbUPMW3nq%2BgTM6T5nNruzjkgQz7Y6jcPiio00ycnxxK7r5YpgQ%0AcInBqDj0PA1HRJjbR8dvAf6Pw5k%3D%0A)
 
 - **Trigger Price**
 

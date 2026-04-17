@@ -6,7 +6,7 @@ state: "published"
 url: "https://intercom.help/webot/en/articles/14119847-rebalancing-bot"
 author_id: 10009720
 created_at: 2026-03-19T06:21:52.000Z
-updated_at: 2026-03-19T06:21:53.000Z
+updated_at: 2026-04-08T00:34:19.000Z
 ---
 # Rebalancing Bot
 > Contents
@@ -14,8 +14,6 @@ updated_at: 2026-03-19T06:21:53.000Z
 > What is the trading strategy of the Rebalancing Bot?
 > Rebalancing Bot Modes
 > Parameter meaning...
-_
-
 **Contents**
 
 - [Why do you need the Rebalancing Bot](#h_01K0X596PC3WT14705YVR3TBQ8)
@@ -74,7 +72,7 @@ Parameter meaning
 
 Example of using a Rebalancing Bot
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937800/a80c463a90765f011e21c61d8f2b/49160908549401?expires=1776232800&signature=66888b3405b56dca39b9cac8aaff08c990c0f82bd8c00e428f534b07a526f068&req=diEgEcB9molfWfMW3nq%2BgaWfRuB2BE%2BEkaGK7ufeJsVHv78BfziiaHoYPmlb%0ALj6E0ecrybTnyoAHCAxdWXCpqyE%3D%0A)
 
 **Explanation of Bot Order Terms**
 
@@ -93,29 +91,29 @@ To get started, simply follow the tutorials on Webot Rebalancing strategy and cr
 **Step 1: **Open the [Webot app](https://www.webot.com/us/en-US/download) and click on [Bot] - [Create], then select [Martingale Bot].
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937829/89b05cd5b93852d1ef597224667d/49160967996825?expires=1776232800&signature=51aaaa2ffc3956cb7f862a97640b89204b38e51d808e98313221bbc4908c92c7&req=diEgEcB9moldUPMW3nq%2BgYCZV08hHSWF0aVfyxGn9UgWkvB5NhFQ7XuhImLT%0AIPvSYyigZ2oSQE9Jyz3C9%2Fq%2FHE8%3D%0A)
 
 **Step 2: **Choose your desired rebalancing mode, select your preferred cryptocurrencies, enter the investment amount, and then click [Create], followed by [Confirm], to successfully set up your bot.
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937861/121c73745931d5a8c5cba5e69719/49160908553241?expires=1776232800&signature=8e4cd1a42689a1afff2ca82e4cd49c36814e88f9104f4cfc3b77e8995bedd9ad&req=diEgEcB9molZWPMW3nq%2BgfpxaPsE6NFLaY1knbXLNP0I44jnaS%2FWcU8OKJUe%0ARQYodmIdb%2BDSlRwoxbGKCaVgnhI%3D%0A)
 
-**On the Web：**
+​**On the Web：**
 
 **Step 1: **Log in to your [Webot account](https://accounts.webot.com/en/sign), click on [Trade] in the upper menu bar, and then select [Trading Bot].
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937906/e9203844801e7bdb97b89611cbfe/49160968009625?expires=1776232800&signature=e8875cba6868b96d4984ff6da64e1a463442fb47b8c23b8c73256f2de2977f44&req=diEgEcB9mohfX%2FMW3nq%2BgYYa4bwyTnSYRNcwDN5I6tVm1TRtjqLz5SPnnXBD%0ABsNtVKn4cxePzUjSesnuLi7ZGUY%3D%0A)
 
 **Step 2: **Click on [Bot] - [All], then select Rebalancing Bot].
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177937965/106b4ba23acb38c3a03bc53570f5/49160908559257?expires=1776232800&signature=cbdc2a52a3e07704608e840628b1c90faff982fffcab2d7cd3bb40c30ada8836&req=diEgEcB9mohZXPMW3nq%2BgdiPWOSv%2BrlHMNrfOJEvTYoDYDQFAU1AQ4JGy%2BTD%0AqIz7KwSAUUPtWap6JCJFG7sQ64Q%3D%0A)
 
 **Step 3: **Select your desired cryptocurrencies, enter the investment amount, choose the appropriate rebalancing mode, and then click [Create], followed by [OK], to successfully set up your bot.
 ​
 
-_
+![](https://webot-d125655f84fc.intercom-attachments-7.com/i/o/c6h9pild/2177938006/d1761370487874b4585915f3ccf1/49160968013977?expires=1776232800&signature=aea44ed93accfcbe7c28f3eda48e15b02afcc6095542a821022b9e11e28fc999&req=diEgEcB9lYFfX%2FMW3nq%2BgeGvETo74Vd4KOwCDe7lO9RV5%2FVn7nLvTuK7FJnJ%0ATNNlwGHitpRLfmZhEmhn9iZO%2F1c%3D%0A)
 
 Rebalancing Bot FAQ
 

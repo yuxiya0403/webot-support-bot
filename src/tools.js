@@ -157,9 +157,9 @@ export const TOOL_DEFINITIONS = [
   {
     name: "webot_check_pair",
     description:
-      "Check if a specific coin or trading pair is listed on Webot, and get its trading details. " +
-      "Use this whenever a user asks if a coin is listed, what pairs are available for a coin, " +
-      "or any question about supported trading pairs on Webot.",
+      "Check if a specific coin or trading pair is listed on Webot. " +
+      "ONLY call this when the user explicitly names a coin or token symbol (e.g. 'is BTC listed?', 'do you support BDAG?'). " +
+      "Do NOT call this for general deposit, balance, or account questions.",
     input_schema: {
       type: "object",
       properties: {
