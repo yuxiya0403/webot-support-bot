@@ -2044,11 +2044,20 @@ function parseAiJsonResponse(raw, matchedFaq, matchedDocuments, lang) {
 
 // Detect queries about a specific coin (listing / deposit / withdrawal availability)
 // For these, we skip FAQ context so the AI is forced to call webot_check_pair
-const COIN_QUERY_RE = /\b(listed|listing|available|supported|deposit|withdraw|trade|buy|sell)\b/i;
+const COIN_QUERY_RE = /\b(listed|listing|list|available|support|supported|deposit|withdraw|trade|buy|sell)\b/i;
 function isCoinQuery(text) {
+  // Structural match: "is X listed?", "is $BDAG available?", "can I trade soon?"
+  if (/\b(?:is|are|does|do|can)\s+(?:i\s+)?\$?[a-z]{2,10}\s+(?:listed|available|supported|traded)\b/i.test(text)) return true;
+  // "do you support/list/have X?"
+  if (/\b(?:do you|does webot|do we)\s+(?:support|list|have|offer)\s+\$?[a-z]{2,10}\b/i.test(text)) return true;
   if (!COIN_QUERY_RE.test(text)) return false;
-  // Must also contain what looks like a coin ticker (2-10 uppercase-ish letters) or a coin name
-  return /\b[A-Z]{2,10}\b/.test(text) || /\b(coin|token|crypto)\b/i.test(text);
+  // Uppercase ticker: "BTC listed?", "check DOGE"
+  if (/\b[A-Z]{2,10}\b/.test(text)) return true;
+  // $-prefixed symbol: "$SOON listed?"
+  if (/\$[a-z]{1,10}\b/i.test(text)) return true;
+  // Generic coin word: "is this coin listed?"
+  if (/\b(coin|token|crypto)\b/i.test(text)) return true;
+  return false;
 }
 
 async function generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup = false }) {
