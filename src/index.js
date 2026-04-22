@@ -2012,7 +2012,7 @@ function toOpenAiTools(toolDefs) {
   }));
 }
 
-function parseAiJsonResponse(raw, matchedFaq, matchedDocuments, lang) {
+function parseAiJsonResponse(raw, _matchedFaq, matchedDocuments, lang) {
   // Find all JSON object candidates and use the last valid one
   const jsonCandidates = [...raw.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]);
   let parsed = null;
@@ -2034,9 +2034,11 @@ function parseAiJsonResponse(raw, matchedFaq, matchedDocuments, lang) {
     return { intent: "answer", text: buildFallbackMessage(lang) };
   }
   const docImageUrls = intent === "answer" ? (matchedDocuments[0]?.imageUrls || []) : [];
+  // Trust the AI's faq_id over the keyword-based matchedFaq
+  const aiFaqId = parsed.faq_id || null;
   return {
     intent,
-    faqId: matchedFaq?.id || null,
+    faqId: aiFaqId,
     imageUrls: docImageUrls,
     text: replyText
   };
@@ -2071,7 +2073,7 @@ async function generateAiResponse({ userText, historyKey, knowledgeBase, matched
     relevantFaqs = knowledgeBase.faqs || [];
   }
   const faqContext = relevantFaqs
-    .map((item) => `Q: ${item.question}\nA: ${item.answer}`)
+    .map((item) => `[${item.id}] Q: ${item.question}\nA: ${item.answer}`)
     .join("\n\n");
   const documentContext = matchedDocuments
     .map((item) => `Source: ${item.path}\n${item.excerpt}`)
