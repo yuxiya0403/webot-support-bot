@@ -5,7 +5,7 @@ import axios from "axios";
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 import OpenAI from "openai";
 import { TOOL_DEFINITIONS, executeToolCall } from "./tools.js";
-import { findTopFaqs, scoreDocsBySimilarity } from "./embeddings.js";
+import { scoreDocsBySimilarity } from "./embeddings.js";
 import { startFaqUpdateScheduler, listPendingSuggestions, approveSuggestions, confirmSuggestions, cancelSuggestions, editSuggestion, rejectSuggestions, listAwaitingConfirm } from "./faq-updater.js";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -290,7 +290,7 @@ async function createIntercomHandoffConversation({ message, userText, historyTex
 // Agent notification — sends handoff alert to all configured agent chats
 // ---------------------------------------------------------------------------
 
-async function notifyAgents({ message, userText, intent }) {
+async function notifyAgents({ message, userText, intent, skipIntercom = false }) {
   console.log(`[notifyAgents] agentChatIds=${JSON.stringify(env.agentChatIds)} intent=${intent}`);
   if (!env.agentChatIds.length) {
     console.log("[notifyAgents] no agent chat IDs configured, skipping");
@@ -307,6 +307,8 @@ async function notifyAgents({ message, userText, intent }) {
   session.lastMessage = userText;
 
   // Create Intercom conversation and save mapping so follow-up messages get forwarded
+  // Skip for group chats — group handoffs are handled by @webot_cs_bot, not Intercom
+  if (skipIntercom) return null;
   createIntercomHandoffConversation({ message, userText, historyText, intent }).then(async (convoId) => {
     if (!convoId) return;
     const contact = await getOrCreateIntercomContact(message.from).catch(() => null);
@@ -1285,8 +1287,10 @@ const CATEGORY_LABELS = {
   "deposits":     "💰 Deposits",
   "withdrawals":  "💸 Withdrawals",
   "trading-bots": "🤖 Trading Bots",
+  "trading":      "📈 Trading",
   "crypto-assets":"🪙 Crypto Assets",
   "security":     "🔒 Security",
+  "tax":          "🧾 Tax",
   "platform":     "🏠 Platform",
   "support":      "🎧 Support"
 };
@@ -1345,6 +1349,16 @@ async function processCallbackQuery(cbq) {
     if (faq.images?.length) {
       await sendFaqImages(chatId, faqId, kb.faqs);
     }
+    return;
+  }
+
+  // Human agent
+  if (data === "human_agent") {
+    const lang = detectLanguage("", "");
+    await editMessageKeyboard(chatId, msgId,
+      buildHandoffMessage(lang),
+      [[{ text: "« Back", callback_data: "home" }]]
+    );
     return;
   }
 
@@ -1411,6 +1425,7 @@ async function processCallbackQuery(cbq) {
 function buildHomeKeyboard() {
   return [
     [{ text: "❓ Browse FAQs", callback_data: "browse_faqs" }],
+    [{ text: "👤 Human Agent", callback_data: "human_agent" }],
     [{ text: "🤝 Business Partnerships", callback_data: "partnerships" }],
     [{ text: "💬 Leave Feedback", callback_data: "feedback" }]
   ];
@@ -1557,23 +1572,19 @@ async function processTelegramUpdate(update) {
   }
 
   if (!userText) {
-    if (inGroup) {
-      await sendTelegramMessage(chatId, "Hi, this is Webot Customer Service Bot. Feel free to ask me any questions about Webot, and I will try my best to solve your problems.", replyToMessageId);
-    } else {
-      await sendTelegramMessage(chatId, "Only text messages are supported right now.", replyToMessageId);
-    }
+    if (inGroup) return; // Ignore empty messages in group (join events, deleted messages, etc.)
+    await sendTelegramMessage(chatId, "Only text messages are supported right now.", replyToMessageId);
     return;
   }
 
   // Feedback collection
   if (feedbackPending.get(String(chatId)) && userText) {
     feedbackPending.delete(String(chatId));
-    const entry = JSON.stringify({ ts: new Date().toISOString(), chat_id: String(chatId), feedback: userText }) + "\n";
-    try {
-      await fs.appendFile(path.join(projectRoot, "data/feedback.jsonl"), entry);
-    } catch (err) {
-      console.error("Failed to save feedback:", err.message);
-    }
+    const userName = buildTelegramDisplayName(message.from);
+    const feedbackMsg = `💬 New Feedback\nFrom: ${userName} (${chatId})\n\n${userText}`;
+    await Promise.allSettled(
+      env.agentChatIds.map((id) => agentBotClient.post("/sendMessage", { chat_id: id, text: feedbackMsg }))
+    );
     await sendWithKeyboard(chatId,
       "Thank you for your feedback! We really appreciate it.",
       [[{ text: "« Back to menu", callback_data: "home" }]]
@@ -1620,7 +1631,7 @@ async function processTelegramUpdate(update) {
     return;
   }
 
-  console.log(`[user-msg] from chatId=${chatId}: ${userText}`);
+  console.log(`[user-msg] from chatId=${chatId} user=${buildTelegramDisplayName(message.from)}: ${userText}`);
 
   if (env.mode === "ai") {
     await sendTyping(chatId);
@@ -1631,9 +1642,15 @@ async function processTelegramUpdate(update) {
     clearInterval(typingInterval);
     // Silently ignore unrelated or unanswerable messages
     if (reply.intent === "ignore") return;
+    // Log bot reply to stdout so Railway retains it
+    console.log(`[bot-reply] chatId=${chatId} intent=${reply.intent} faq=${reply.faqId || "none"}: ${reply.text.slice(0, 200)}`);
     // Skip sending if already sent with keyboard (e.g. /start in private chat)
     if (!reply.skipSend) {
-      await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
+      try {
+        await sendTelegramMessage(message.chat.id, reply.text, replyToMessageId);
+      } catch (sendErr) {
+        console.error(`[send-error] chatId=${chatId}: ${sendErr.response?.data?.description || sendErr.message}`);
+      }
     }
     // Send tutorial images if the matched FAQ has any
     let faqHadImages = false;
@@ -1750,7 +1767,7 @@ async function buildAiReply(message, inGroup = false, isMentioned = false) {
       // In group: only handoff if bot was directly mentioned, otherwise stay silent
       if (!isMentioned) return { intent: "ignore", text: "" };
       const lang = detectLanguage("", userText);
-      await notifyAgents({ message, userText, intent: aiReply.handoffReason || aiReply.intent });
+      await notifyAgents({ message, userText, intent: aiReply.handoffReason || aiReply.intent, skipIntercom: true });
       return { intent: "handoff", text: buildHandoffMessage(lang) };
     }
     await notifyAgents({ message, userText, intent: aiReply.handoffReason || aiReply.intent });
@@ -1836,7 +1853,7 @@ function isIgnorableMessage(text, inGroup) {
   return false;
 }
 
-function detectLanguage(languageCode, messageText = "") {
+function detectLanguage(_languageCode, messageText = "") {
   // Detect from message content first — most reliable
   if (/[\u4e00-\u9fff\u3400-\u4dbf]/.test(messageText)) return "zh";
   return "en"; // default to English
@@ -1928,70 +1945,8 @@ function hasAnyTokenOverlap(left, right) {
     .some((token) => leftTokens.has(token));
 }
 
-// ---------------------------------------------------------------------------
-// Category detection — maps user message to relevant FAQ categories
-// ---------------------------------------------------------------------------
 
-const CATEGORY_SIGNALS = {
-  "account":       ["password", "login", "log in", "sign in", "sign up", "register", "2fa", "two factor", "authenticator", "google auth", "kyc", "verify", "verification", "identity", "account", "email", "reset", "locked out", "can't access", "密码", "登录", "注册", "认证", "实名"],
-  "deposits":      ["deposit", "fund", "funds", "top up", "add money", "ach", "wire", "debit card", "bank", "pending", "hold", "holding", "3ds", "3d secure", "hasn't arrived", "not arrived", "not received", "not showing", "not credited", "didn't receive", "missing", "where is my", "never showed", "still waiting", "took too long", "how long", "delayed", "stuck", "충值", "入金", "转入", "银行", "待处理", "没到账", "没收到"],
-  "withdrawals":   ["withdraw", "withdrawal", "send", "transfer out", "cash out", "txid", "transaction id", "hash", "can't withdraw", "unable to withdraw", "withdrawal failed", "withdrawal pending", "withdrawal missing", "提现", "出金", "转出", "提币", "取款", "无法提现"],
-  "trading-bots":  ["bot", "grid", "martingale", "dca", "twap", "rebalancing", "smart trade", "moon bot", "running bot", "stop bot", "bot profit", "bot loss", "机器人", "网格", "定投", "再平衡"],
-  "crypto-assets": ["fee", "fees", "listed", "listing", "coin", "token", "network", "erc20", "trc20", "bep20", "solana", "supported", "which coins", "what coins", "手续费", "上架", "币种", "网络"],
-  "security":      ["scam", "fraud", "hack", "hacked", "phishing", "stolen", "suspicious", "fake", "unauthorized", "诈骗", "被骗", "欺诈"],
-  "platform":      ["webot", "pionex", "about", "what is", "upgrade", "rebrand", "migration", "difference", "平台", "介绍"]
-};
 
-const ALWAYS_INCLUDE = ["what-is-webot", "human-support"];
-
-function detectCategories(userText) {
-  const normalized = userText.toLowerCase();
-  const detected = new Set();
-  for (const [category, signals] of Object.entries(CATEGORY_SIGNALS)) {
-    if (signals.some((s) => normalized.includes(s))) {
-      detected.add(category);
-    }
-  }
-  return [...detected];
-}
-
-function selectFaqsForContext(userText, faqs) {
-  const detectedCategories = detectCategories(userText);
-  const result = [];
-  const seen = new Set();
-
-  // Always include pinned FAQs first
-  for (const faq of faqs) {
-    if (ALWAYS_INCLUDE.includes(faq.id)) {
-      result.push(faq);
-      seen.add(faq.id);
-    }
-  }
-
-  // Add FAQs from detected categories
-  if (detectedCategories.length > 0) {
-    for (const faq of faqs) {
-      if (!seen.has(faq.id) && detectedCategories.includes(faq.category)) {
-        result.push(faq);
-        seen.add(faq.id);
-      }
-    }
-  }
-
-  // If no category detected or still under 10, fill with remaining FAQs up to 20
-  const MAX = 20;
-  if (result.length < MAX) {
-    for (const faq of faqs) {
-      if (!seen.has(faq.id)) {
-        result.push(faq);
-        seen.add(faq.id);
-        if (result.length >= MAX) break;
-      }
-    }
-  }
-
-  return result;
-}
 
 // ---------------------------------------------------------------------------
 // Shared helpers for AI response parsing
@@ -2048,15 +2003,10 @@ async function generateAiResponse({ userText, historyKey, knowledgeBase, matched
   const coinQuery = isCoinQuery(userText);
 
   // For coin listing/availability queries skip FAQ context entirely — forces AI to call the tool
+  // Always pass all FAQs so the AI can reason about full intent, not just keyword similarity
   let relevantFaqs = [];
   if (!coinQuery) {
-    const allFaqs = knowledgeBase.faqs || [];
-    try {
-      relevantFaqs = await findTopFaqs(userText, allFaqs, 10);
-    } catch (err) {
-      console.error("[embeddings] falling back to all FAQs:", err.message);
-      relevantFaqs = allFaqs;
-    }
+    relevantFaqs = knowledgeBase.faqs || [];
   }
   const faqContext = relevantFaqs
     .map((item) => `Q: ${item.question}\nA: ${item.answer}`)
@@ -2071,8 +2021,10 @@ async function generateAiResponse({ userText, historyKey, knowledgeBase, matched
       "You are a concise Telegram AI customer support agent.",
       languageInstruction,
       "Only answer based on the provided business summary and FAQ context.",
+      "Write replies naturally and conversationally — do NOT copy-paste FAQ answers verbatim. Rephrase in your own words while keeping the meaning accurate.",
       "If the question is completely unrelated to the business (e.g. general knowledge, news, weather, other companies), set intent to 'ignore' and reply to empty string — do not reply at all.",
       "If the question is about the business but you cannot answer it from the provided context, set intent to 'handoff'.",
+      "When referring users to human support, always use the exact Telegram username @webot_cs_bot — never shorten or alter it.",
       "Do not invent prices, policies, or guarantees.",
       'Always respond with JSON: {"intent": "answer", "handoff", or "ignore", "reply": "<your reply or empty string>"}.'
     ].join(" ");
@@ -2234,7 +2186,7 @@ async function findRelevantDocuments(userText) {
   const topDocs = rerankDocumentsByFreshnessIntent(
     userText,
     await scoreDocsBySimilarity(userText, allDocs, 12)
-  ).slice(0, 5);
+  ).slice(0, 8);
   return topDocs.map((doc) => ({
     path: doc.path,
     excerpt: buildExcerpt(userText, doc.text),
@@ -2327,27 +2279,6 @@ async function loadDocument(filePath) {
   }
 }
 
-function scoreDocument(userText, documentText) {
-  const normalizedQuestion = normalizeForSearch(userText);
-  const normalizedDocument = normalizeForSearch(documentText).slice(0, 20000);
-  let score = 0;
-
-  if (normalizedDocument.includes(normalizedQuestion) && normalizedQuestion) {
-    score += normalizedQuestion.length + 5;
-  }
-
-  const tokens = normalizedQuestion.split(" ").filter(Boolean);
-  for (const token of tokens) {
-    if (token.length < 2) {
-      continue;
-    }
-    if (normalizedDocument.includes(token)) {
-      score += 1;
-    }
-  }
-
-  return score;
-}
 
 function extractImageUrls(text) {
   const urls = [];
@@ -2372,7 +2303,7 @@ function buildExcerpt(userText, documentText) {
     return raw.slice(Math.max(0, index - 300), index + 900);
   }
 
-  return raw.slice(0, 1200);
+  return raw.slice(0, 3000);
 }
 
 function formatError(error) {

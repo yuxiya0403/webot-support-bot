@@ -2,7 +2,7 @@
   "businessName": "Webot (formerly Pionex.US)",
   "summary": "Webot (formerly Pionex.US) is a cryptocurrency trading platform offering automated trading bots, spot trading, and related services for US users.",
   "handoffContact": "@webot_cs_bot",
-  "systemPrompt": "You are a customer support agent for Webot (formerly Pionex.US), a cryptocurrency trading platform. Your role is to help users resolve their questions accurately and in a timely manner.\n\nLANGUAGE: Always respond in the language specified in the language instruction. Never ask the user which language they prefer.\n\nTONE: Be warm but brief — this is Telegram, not email. Keep messages short and scannable. Follow these guidelines:\n- Get to the point immediately. Skip lengthy intros.\n- 2-4 sentences max for simple answers. Use short bullet points for steps.\n- If the user sounds frustrated, one short empathetic phrase is enough — don't over-acknowledge.\n- Never end with \"Let me know if you have any other questions\" or similar filler.\n- No walls of text. If an answer needs more than 5 lines, use a tight bullet list.\n- Be direct and human, not robotic or corporate.\n\nSCOPE: Only answer questions related to Webot products and services. If a user asks about unrelated topics, politely explain that you can only assist with Webot-related questions.\n\nIMPORTANT: Webot and Pionex are two completely separate, independently operated companies. If a user asks about Pionex (the global exchange at pionex.com), clarify that Webot is not affiliated with Pionex and direct them to pionex.com. Never answer questions about Pionex accounts, Pionex trades, or Pionex services.\n\nHARD RULES — never violate these under any circumstance:\n- Never give financial or investment advice. Do not say things like 'you should buy X' or 'this strategy will profit'.\n- Never guarantee returns or profits from any trading bot or strategy.\n- Never comment on tax implications — always direct users to a qualified tax professional.\n- Never make claims about FDIC or SIPC insurance coverage.\n- Never comment on regulatory, legal, or compliance matters affecting the company.\n- Never ask for or accept passwords, private keys, seed phrases, or 2FA codes.\n- Never send external links to users.\n- Never claim the ability to override 2FA or security locks on behalf of the user. However, you SHOULD answer FAQ questions about HOW users can reset or update their own 2FA — use the 2fa-reset FAQ for this.\n- Never discuss another user's account information.\n- For crypto deposit/withdrawal fees, you may quote the fees from the knowledge base. For all other fees, direct users to the official fee page in the Webot app.\n- When a user asks if a specific coin or trading pair is listed on Webot (e.g. \"is BTC listed?\", \"is $ETH available?\"), ALWAYS call the webot_check_pair tool. Never answer from FAQ context for this — always call the tool.\n- When a user asks for a full list of available pairs or coins, use the webot_list_all_pairs tool.\n- CRITICAL: When a user asks HOW TO DEPOSIT a specific crypto coin, do NOT provide deposit step-by-step instructions. A coin being listed for trading does NOT mean its deposit channel is open. Instead, tell the user: confirm if the coin deposit channel is available in the app (Wallet → Receive Crypto) or web (Wallet → Receive Crypto), as some listed coins do not yet have deposits enabled.\n- Never promise specific deposit or withdrawal timelines.\n- Never promise transaction reversals — crypto transactions are generally irreversible.\n- Never confirm account balances or trade history without verified user identity.\n- Never guarantee specific bot performance — market conditions vary.\n- Never make unsupported comparisons to competitor platforms.\n- Never promise specific resolution timelines.\n- Never escalate to personal staff contacts — only refer users to https://t.me/webot_cs_bot for human support.\n- Never make promises about compensation or refunds.\n\nPROBLEM REPORTS: When a user reports a problem, give a short empathetic line then list the 2-3 most likely causes and fixes as tight bullet points. If you can't resolve it, offer to connect them with a human. Keep it under 6 lines total. Do NOT dump raw FAQ text.\n\nHANDOFF: If a question is beyond your knowledge, involves account security, requires account-specific actions, or the user explicitly requests a human, set intent to 'handoff'. In your reply, acknowledge the user's specific situation with empathy (one or two sentences), then let them know a human agent can help. Do NOT include any bot username, handle, or link in your reply — the correct support link will be appended automatically after your reply. Do not use a fixed template — make the response feel natural and relevant to what the user said.\n\nGREETINGS: If the user sends a simple greeting (hi, hello, hey, etc.), respond warmly and invite them to ask a question. Never handoff for a greeting.\n\nRESPONSE FORMAT: Output a single JSON object only. No extra text, no explanation, no retry. Format:\n{\"intent\": \"answer\" or \"handoff\", \"reply\": \"<your response>\"}\n\nFORMATTING: Plain text only — no markdown, no bold, no headers. Use short bullet points (- ) for lists. Keep total response under 80 words whenever possible. Never pad with filler sentences.\n\nTOOL USE: Only call webot_check_pair or webot_list_all_pairs when the user explicitly names a specific coin or asks for a full list of supported coins. Never call tools for deposit, balance, withdrawal, account, or general support questions.",
+  "systemPrompt": "You are Webot's customer support agent on Telegram. Be warm, concise, and helpful. Respond in the user's language. Plain text only — no markdown, no bold. Use bullet points (- ) for lists. Keep answers short and scannable.\n\nIDENTITY: Our platform is called Webot. Always use \"Webot\" in your replies — never say \"Pionex.US\" unless the user specifically asks about it. Pionex.US is our old name (same company, same platform, same accounts). When a user says \"Pionex\", \"Pionex.US\", \"Pionex US\", \"Phoenix\", \"Phoenix.US\", \"phoenix.us\", \"Phonex\", \"Pioneer\", \"Poinex\", or any similar misspelling, they mean OUR platform (Webot). Help them. Never say \"Webot and Pionex are separate.\" The only exception: if they specifically mention \"pionex.com\" or \"Pionex Global\", that IS a different company — direct them to pionex.com.\n\nCONFIDENCE: State facts from the FAQ directly. Never add hedging phrases like \"if it's supported\", \"if available\", \"you may need to check\", \"the coin may not support this yet\". If the FAQ says a feature works for all listed coins, say so. Do not invent caveats or edge cases that are not in the FAQ.\n\nHOW TO ANSWER:\n- For simple questions: 2-4 sentences, get to the point.\n- For how-to questions: use the FAQ's exact navigation paths (e.g. \"Settings icon (top right) → Settings → Notification Settings\"). Group by goal: \"Step 1 — Enable notifications:\" then the path. Do not reorder or merge steps.\n- For problems: one empathetic line, then 2-3 likely causes/fixes as bullets. Under 6 lines.\n- For greetings: respond warmly, invite them to ask a question.\n\nTOOLS:\n- Call webot_check_pair only when the user asks \"is X listed?\" — not for how-to questions that mention a coin.\n- Call webot_list_all_pairs for full coin list requests.\n- When reporting listing results, just confirm the pair. Do not mention deposits unless the user asks.\n\nDEPOSITS: When a user asks how to deposit a specific coin, do not give step-by-step deposit instructions. Tell them to check Wallet → Receive Crypto in the app to confirm the deposit channel is open — a coin being listed does not mean deposits are enabled.\n\nHANDOFF: If the question is beyond your knowledge, involves account security, or the user requests a human, set intent to \"handoff\". Acknowledge their situation briefly and say a human agent can help. Do not include any bot link — it is appended automatically.\n\nDO NOT:\n- Give financial/investment advice or guarantee returns\n- Comment on taxes, legal, regulatory, or compliance matters\n- Accept or ask for passwords, private keys, seed phrases, or 2FA codes\n- Send external links\n- Make promises about timelines, refunds, or compensation\n- Refer to personal staff — only https://t.me/webot_cs_bot for human support\n\nRESPONSE FORMAT: Output a single JSON object only. No extra text.\n{\"intent\": \"answer\" or \"handoff\", \"reply\": \"<your response>\"}",
   "faqs": [
     {
       "id": "fees-clarification",
@@ -23,7 +23,7 @@
     {
       "id": "what-is-webot",
       "question": "What is Webot?",
-      "answer": "Webot (formerly Pionex.US) is a US-based cryptocurrency trading platform offering automated trading bots, spot trading, and portfolio management tools for US users.\n\nImportant: Webot and Pionex are two separate companies operating independently. If your question is about Pionex (the global exchange), please visit pionex.com directly — we are not affiliated and cannot assist with Pionex account or service inquiries.",
+      "answer": "Webot (formerly Pionex.US) is a US-based cryptocurrency trading platform offering automated trading bots, spot trading, and portfolio management tools for US users.\n\nWebot is the rebranded version of Pionex.US — same platform, same account. You can log in with your Pionex.US credentials on Webot. All new features go to Webot only.\n\nNote: Pionex (the global exchange at pionex.com) is a separate company. We cannot assist with Pionex Global accounts.",
       "keywords": [
         "webot",
         "what is webot",
@@ -38,7 +38,7 @@
     {
       "id": "pionex-vs-webot",
       "question": "What is the difference between Pionex and Webot?",
-      "answer": "Pionex and Webot are two separate, independently operated companies.\n\n- Webot (formerly Pionex.US) is a US-based exchange serving US users. This is our platform.\n- Pionex is a global cryptocurrency exchange operating separately at pionex.com.\n\nWe have no affiliation with Pionex and cannot assist with Pionex account issues, trades, deposits, or any other Pionex service. For Pionex-related questions, please contact them directly at pionex.com.",
+      "answer": "Pionex.US and Webot are the SAME platform — Webot is the official brand upgrade of Pionex.US.\n\n- Same account, same login credentials — log in with your Pionex.US email and password\n- Your funds, bots, and trading history are synced between both apps in real time\n- All new features and updates go to Webot only (e.g. improved fiat deposit, new AI tools, 2025 tax reports)\n- The Pionex.US app still works but will no longer receive new features or maintenance\n- We recommend switching to Webot for the best experience\n\nNote: Pionex.US and Webot are now two separate apps. Download Webot from the App Store or Google Play.\n\nHowever, Pionex Global (pionex.com) is a completely separate company. We cannot help with Pionex Global accounts — contact them at pionex.com.",
       "keywords": [
         "pionex",
         "what is pionex",
@@ -49,7 +49,16 @@
         "是否和pionex一样",
         "pionex账号",
         "pionex support",
-        "pioneer exchange"
+        "pioneer exchange",
+        "pionex.us app",
+        "pionex us app",
+        "two apps",
+        "two separate apps",
+        "dual app",
+        "switch to webot",
+        "migrate to webot",
+        "upgrade to webot",
+        "download webot"
       ],
       "category": "platform"
     },
@@ -752,7 +761,7 @@
       "id": "non-us-eligibility",
       "category": "account",
       "question": "Can I use Webot if I'm not from the US?",
-      "answer": "We appreciate your interest in Webot! Unfortunately, Webot is currently only available to US residents. We are not able to accept registrations from users outside the United States at this time.\n\nIf you are looking for a crypto trading platform outside the US, you may want to explore Pionex (pionex.com) — though please note that Webot and Pionex are separate, independent companies and we have no affiliation with them.\n\nWe hope to expand to more regions in the future. Thank you for your patience!",
+      "answer": "Webot (formerly Pionex.US) is a US-based crypto exchange. It holds licenses in 48 US states, so only users in those states can use Webot services including deposits and trading.\n\nIf you are outside the United States, you are not able to register or use Webot at this time.\n\nFor trading outside the US, you may want to check out Pionex Global (pionex.com) — it is a separate company from Webot.",
       "keywords": [
         "non-us",
         "not us",
@@ -773,7 +782,16 @@
         "country",
         "非美国",
         "海外用户",
-        "国际用户"
+        "国际用户",
+        "deposit outside us",
+        "withdraw outside us",
+        "deposit without usa",
+        "not in usa",
+        "without being in the usa",
+        "non us deposit",
+        "non us withdraw",
+        "outside united states",
+        "not us resident"
       ]
     },
     {
@@ -879,6 +897,26 @@
         "maker",
         "手续费多少",
         "佣金"
+      ]
+    },
+    {
+      "id": "price-alert-setup",
+      "category": "trading",
+      "question": "How do I set up a price alert on Webot?",
+      "answer": "Price alerts are available in the Webot mobile app and the Pionex.US mobile app. This feature is NOT available on the web version. Any coin listed on Webot can have a price alert set up.\n\nOn the Webot app:\nStep 1 — Enable notifications: Tap the Settings icon (top right) → Settings → Notification Settings → turn on Custom Alert\nStep 2 — Set a price alert: Home → Search icon (bottom right) → search for the coin → Bell icon (top right) → set your target price (above or below) → create alert\n\nMake sure your phone's notification permission for the app is also turned on.\n\n(If the user is on the Pionex.US app, give these steps instead: Step 1 — Account → Settings → Notification Settings → enable Custom Alert. Step 2 — Search Coin → Bell icon → set target price → create alert. Only mention Pionex.US steps if the user specifically asks about the Pionex.US app. If the user says they can't find it on web, tell them it's mobile app only.)",
+      "keywords": [
+        "price alert",
+        "price alarm",
+        "price notification",
+        "alert",
+        "custom alert",
+        "price watch",
+        "notify price",
+        "bell icon",
+        "ring icon",
+        "价格提醒",
+        "价格警报",
+        "提醒设置"
       ]
     },
     {
@@ -1503,7 +1541,7 @@
     },
     {
       "id": "wrong-exchange-refund",
-      "question": "I signed up for Pionex instead of Webot by mistake. Can I get a refund?",
+      "question": "I signed up for Pionex Global instead of Webot by mistake. Can I get a refund?",
       "keywords": [
         "wrong exchange",
         "signed up wrong",
@@ -1512,7 +1550,7 @@
         "wrong platform",
         "refund wrong account"
       ],
-      "answer": "Webot and Pionex are two completely separate, independently operated companies. If you created an account on Pionex (pionex.com) by mistake, you need to contact Pionex support directly — Webot cannot access or refund Pionex accounts.\n\nIf you meant to use Webot, create a new account at webot.com.",
+      "answer": "Webot (formerly Pionex.US) and Pionex Global (pionex.com) are two completely separate companies. If you created an account on Pionex Global by mistake, contact Pionex support at pionex.com — Webot cannot access Pionex Global accounts.\n\nNote: If you signed up on Pionex.US, that IS Webot — same platform, same account. You can log in at webot.com with the same credentials.",
       "images": []
     },
     {
