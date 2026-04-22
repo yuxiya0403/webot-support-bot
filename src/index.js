@@ -1601,6 +1601,8 @@ async function processTelegramUpdate(update) {
 
   // User in active handoff session — /start or /close exits it, other messages forward to agent
   const activeSession = getSessionByUserChatId(chatId);
+  // In group, ignore "close" if there's no active session — it's someone else's conversation
+  if (!activeSession && inGroup && /\bclose\b/i.test(userText)) return;
   if (activeSession) {
     if (userText.toLowerCase() === "/close" || userText.toLowerCase() === "close") {
       closeHandoffSession(activeSession.ref);
