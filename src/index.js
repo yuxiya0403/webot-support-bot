@@ -2145,10 +2145,13 @@ async function generateAiResponse({ userText, historyKey, knowledgeBase, matched
       }
       throw new Error("OpenAI agentic loop exceeded max turns.");
     } catch (error) {
-      console.error("AI generation error (openai)", formatError(error));
+      console.error("⚠️ AI generation error (openai)", formatError(error));
+      console.error("⚠️ Falling back to FAQ match for query:", userText);
       if (matchedFaq) {
+        console.error("⚠️ FAQ fallback matched:", matchedFaq.id, matchedFaq.question);
         return { intent: "faq", text: matchedFaq.answer };
       }
+      console.error("⚠️ No FAQ match, returning handoff");
       return { intent: "handoff", text: buildFallbackMessage(lang) };
     }
   }
@@ -2192,10 +2195,13 @@ async function generateAiResponse({ userText, historyKey, knowledgeBase, matched
 
     throw new Error("Agentic loop exceeded max turns.");
   } catch (error) {
-    console.error("AI generation error", formatError(error));
+    console.error("⚠️ AI generation error (bedrock)", formatError(error));
+    console.error("⚠️ Falling back to FAQ match for query:", userText);
     if (matchedFaq) {
+      console.error("⚠️ FAQ fallback matched:", matchedFaq.id, matchedFaq.question);
       return { intent: "faq", text: matchedFaq.answer };
     }
+    console.error("⚠️ No FAQ match, returning handoff");
     return { intent: "handoff", text: buildFallbackMessage(lang) };
   }
 }
