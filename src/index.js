@@ -1851,6 +1851,8 @@ const GREETING_PATTERNS = /^(hi+|hey+|hello|helo|hola|yo|sup|howdy|greetings|goo
 
 function isIgnorableMessage(text, inGroup, message) {
   if (!inGroup) return false;
+  // If replying to the bot's own message, always process it — user is engaging with us
+  if (message?.reply_to_message && !isReplyToOtherUser(message)) return false;
   const t = text.trim();
   if (t.length <= 3) return true;
   if (GREETING_PATTERNS.test(t)) return true;
