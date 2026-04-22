@@ -1746,7 +1746,7 @@ async function buildAiReply(message, inGroup = false, isMentioned = false) {
   }
 
   // Pre-filter: ignore greetings/chit-chat before calling AI
-  if (isIgnorableMessage(userText, inGroup)) {
+  if (isIgnorableMessage(userText, inGroup, message)) {
     return { intent: "ignore", text: "" };
   }
 
@@ -1845,14 +1845,32 @@ function buildWelcomeMessage(knowledgeBase, lang) {
 
 const GREETING_PATTERNS = /^(hi+|hey+|hello|helo|hola|yo|sup|howdy|greetings|good\s?(morning|afternoon|evening|night|day)|thanks?|thank\s?you|thx|ty|ok|okay|k|lol|haha|hehe|nice|cool|great|awesome|👍|🙏|😊|😀|😁|🤙|✌️|👋|🫡|😂|🤣)[!?.]*$/i;
 
-function isIgnorableMessage(text, inGroup) {
+function isIgnorableMessage(text, inGroup, message) {
   if (!inGroup) return false;
   const t = text.trim();
   if (t.length <= 3) return true;
   if (GREETING_PATTERNS.test(t)) return true;
+  // If the message @mentions someone else (not our bot), it's directed at another user — ignore
+  if (mentionsOtherUser(message)) return true;
   // Filter out casual chat / non-question messages in group
   // Only keep messages that look like a question or contain Webot-related keywords
   if (!looksLikeSupportQuestion(t)) return true;
+  return false;
+}
+
+function mentionsOtherUser(message) {
+  const entities = message?.entities || [];
+  const text = (message?.text || "").toLowerCase();
+  const ourMention = botUsername ? `@${botUsername}`.toLowerCase() : null;
+  for (const e of entities) {
+    if (e.type === "mention") {
+      const mentioned = text.slice(e.offset, e.offset + e.length).toLowerCase();
+      // Skip our own bot mention
+      if (ourMention && mentioned === ourMention) continue;
+      // Another user/bot is being tagged
+      return true;
+    }
+  }
   return false;
 }
 
