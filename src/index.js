@@ -112,6 +112,7 @@ let writeChain = Promise.resolve();
 let telegramPollingOffset = 0;
 let agentBotPollingOffset = 0;
 let botUsername = ""; // fetched on startup via getMe
+let botUserId = 0;
 
 // Users who have been prompted to enter feedback (chatId -> true)
 const feedbackPending = new Map();
@@ -953,7 +954,8 @@ async function fetchBotInfo() {
   try {
     const res = await telegramClient.get("/getMe");
     botUsername = res.data?.result?.username || "";
-    console.log(`Bot username: @${botUsername}`);
+    botUserId = res.data?.result?.id || 0;
+    console.log(`Bot username: @${botUsername} (id: ${botUserId})`);
   } catch (err) {
     console.error("Failed to fetch bot info", err.message);
   }
@@ -1854,6 +1856,8 @@ function isIgnorableMessage(text, inGroup, message) {
   if (GREETING_PATTERNS.test(t)) return true;
   // If the message @mentions someone else (not our bot), it's directed at another user — ignore
   if (mentionsOtherUser(message)) return true;
+  // If replying to another user's message (not the bot's), it's a conversation between users — ignore
+  if (isReplyToOtherUser(message)) return true;
   // Filter out casual chat / non-question messages in group
   // Only keep messages that look like a question or contain Webot-related keywords
   if (!looksLikeSupportQuestion(t)) return true;
@@ -1874,6 +1878,15 @@ function mentionsOtherUser(message) {
     }
   }
   return false;
+}
+
+function isReplyToOtherUser(message) {
+  const replyTo = message?.reply_to_message;
+  if (!replyTo) return false;
+  // If replying to the bot's own message, that's directed at us — don't ignore
+  if (botUserId && replyTo.from?.id === botUserId) return false;
+  // Replying to someone else's message — it's a user-to-user conversation
+  return true;
 }
 
 // Heuristic: does this message look like something the bot should answer?
