@@ -2033,9 +2033,10 @@ function parseAiJsonResponse(raw, _matchedFaq, matchedDocuments, lang) {
   if (!replyText) {
     return { intent: "answer", text: buildFallbackMessage(lang) };
   }
-  const docImageUrls = intent === "answer" ? (matchedDocuments[0]?.imageUrls || []) : [];
+  const showImages = parsed.show_images === true;
+  const docImageUrls = (intent === "answer" && showImages) ? (matchedDocuments[0]?.imageUrls || []) : [];
   // Trust the AI's faq_id over the keyword-based matchedFaq
-  const aiFaqId = parsed.faq_id || null;
+  const aiFaqId = showImages ? (parsed.faq_id || null) : null;
   return {
     intent,
     faqId: aiFaqId,
