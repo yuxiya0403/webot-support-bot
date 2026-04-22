@@ -1638,10 +1638,12 @@ async function processTelegramUpdate(update) {
   console.log(`[user-msg] from chatId=${chatId} user=${buildTelegramDisplayName(message.from)}: ${userText}`);
 
   if (env.mode === "ai") {
-    await sendTyping(chatId);
-    const typingInterval = !inGroup ? setInterval(() => sendTyping(chatId), 4000) : null;
     const messageWithStrippedText = { ...message, text: userText };
     const isMentioned = inGroup && isBotMentioned(message);
+    // Only show typing when the message looks like a question — avoids phantom typing for ignored messages
+    const shouldType = looksLikeQuestion(userText) || isMentioned || !inGroup;
+    if (shouldType) await sendTyping(chatId);
+    const typingInterval = shouldType ? setInterval(() => sendTyping(chatId), 4000) : null;
     const reply = await buildAiReply(messageWithStrippedText, inGroup, isMentioned);
     clearInterval(typingInterval);
     // Silently ignore unrelated or unanswerable messages
@@ -1893,6 +1895,13 @@ function isReplyToOtherUser(message) {
 
 // Heuristic: does this message look like something the bot should answer?
 const SUPPORT_KEYWORDS = /\b(webot|pionex|deposit|withdraw|transfer|fee|fees|listed|listing|list|trade|trading|bot|grid|dca|martingale|twap|moon|rebalanc|kyc|verif|2fa|authenticat|password|login|log\s?in|sign\s?up|register|account|balance|fund|wallet|coin|token|crypto|btc|eth|usdt|usdc|sol|ada|xrp|doge|ach|wire|debit|bank|stuck|pending|missing|frozen|suspend|scam|hack|support|agent|human|help|how\s?(do|can|to)|what\s?(is|are)|where|when|why|can\s?i|is\s?(there|it|my)|do\s?(you|i)|does|充值|提现|转账|手续费|上架|交易|机器人|钱包|币|账户|密码|登录|注册|验证|人工|客服|怎么|为什么|什么|可以|能不能|如何)\b/i;
+
+function looksLikeQuestion(text) {
+  if (/[?？]/.test(text)) return true;
+  if (/^(how|what|where|when|why|can|does|do|is|are|will|should|could|would)\b/i.test(text)) return true;
+  if (/[\u4e00-\u9fff].*(吗|呢|嘛|么|怎|哪|谁|几|多少|为啥|啥)/.test(text)) return true;
+  return false;
+}
 
 function looksLikeSupportQuestion(text) {
   // Contains a question mark — likely a question
