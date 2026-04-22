@@ -1850,6 +1850,24 @@ function isIgnorableMessage(text, inGroup) {
   const t = text.trim();
   if (t.length <= 3) return true;
   if (GREETING_PATTERNS.test(t)) return true;
+  // Filter out casual chat / non-question messages in group
+  // Only keep messages that look like a question or contain Webot-related keywords
+  if (!looksLikeSupportQuestion(t)) return true;
+  return false;
+}
+
+// Heuristic: does this message look like something the bot should answer?
+const SUPPORT_KEYWORDS = /\b(webot|pionex|deposit|withdraw|transfer|fee|fees|listed|listing|list|trade|trading|bot|grid|dca|martingale|twap|moon|rebalanc|kyc|verif|2fa|authenticat|password|login|log\s?in|sign\s?up|register|account|balance|fund|wallet|coin|token|crypto|btc|eth|usdt|usdc|sol|ada|xrp|doge|ach|wire|debit|bank|stuck|pending|missing|frozen|suspend|scam|hack|support|agent|human|help|how\s?(do|can|to)|what\s?(is|are)|where|when|why|can\s?i|is\s?(there|it|my)|do\s?(you|i)|does|充值|提现|转账|手续费|上架|交易|机器人|钱包|币|账户|密码|登录|注册|验证|人工|客服|怎么|为什么|什么|可以|能不能|如何)\b/i;
+
+function looksLikeSupportQuestion(text) {
+  // Contains a question mark — likely a question
+  if (/[?？]/.test(text)) return true;
+  // Contains Webot/crypto/support keywords
+  if (SUPPORT_KEYWORDS.test(text)) return true;
+  // Starts with question words
+  if (/^(how|what|where|when|why|can|does|do|is|are|will|should|could|would)\b/i.test(text)) return true;
+  // Chinese question patterns
+  if (/[\u4e00-\u9fff].*(吗|呢|嘛|么|没|不|怎|哪|谁|几|多少|为啥|啥)/.test(text)) return true;
   return false;
 }
 
@@ -2030,7 +2048,7 @@ async function generateAiResponse({ userText, historyKey, knowledgeBase, matched
     ].join(" ");
 
   const groupInstruction = inGroup
-    ? "\nGROUP CHAT MODE: You are in a public Webot support group. ONLY respond if the message is a clear question or request about Webot's products, features, fees, account, deposits, withdrawals, or trading bots. Set intent to 'ignore' and reply to empty string for ALL of the following: greetings (hi, hello, hey, good morning, etc.), one-word messages, thank-you messages, casual conversation, emojis only, price speculation, news, or anything unrelated to Webot support. When you cannot answer, suggest the user contact a human agent. Do not respond to every message — only genuine support questions."
+    ? "\nGROUP CHAT MODE: This is a public Webot community group. Users chat with each other — most messages are NOT directed at you. ONLY reply if the message is clearly asking for help with Webot (account, deposits, withdrawals, trading bots, fees, KYC, etc.). If someone is chatting with another user, sharing opinions, reacting, or discussing anything not related to Webot support, set intent to 'ignore' with empty reply. When in doubt, ignore — it is much better to stay silent than to interrupt a conversation. Only genuine support questions deserve a reply."
     : "";
 
   const systemPrompt = [
