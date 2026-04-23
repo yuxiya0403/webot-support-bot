@@ -1670,12 +1670,13 @@ async function processTelegramUpdate(update) {
     if (!faqHadImages && reply.imageUrls?.length) {
       const imgCache = await loadImageCache();
       for (const url of reply.imageUrls) {
+        if (url in imgCache && !imgCache[url]) continue; // null means previously failed
         const photo = imgCache[url] || url; // use file_id if cached, else raw URL
-        if (!photo) continue; // null means previously failed
         try {
           await telegramClient.post("/sendPhoto", { chat_id: message.chat.id, photo });
         } catch (err) {
           console.error("[doc-image] failed to send:", err.message);
+          await markImageFailed(url); // mark URL as permanently failed, skip next time
         }
       }
     }
@@ -1807,6 +1808,14 @@ async function loadImageCache() {
     imageCacheData = {};
   }
   return imageCacheData;
+}
+
+async function markImageFailed(url) {
+  const cache = await loadImageCache();
+  cache[url] = null; // null = permanently failed, skip on future attempts
+  try {
+    await fs.writeFile(resolveProjectPath("./data/image-cache.json"), JSON.stringify(cache));
+  } catch {}
 }
 
 async function loadKnowledgeBase() {
