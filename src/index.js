@@ -2128,16 +2128,21 @@ function toOpenAiTools(toolDefs) {
 }
 
 function parseAiJsonResponse(raw, _matchedFaq, matchedDocuments, lang) {
+  // Sanitize bare newlines inside the JSON string so JSON.parse doesn't choke
+  const sanitized = raw.replace(/\r?\n/g, "\\n");
+
   // Find all JSON object candidates and use the last valid one
-  const jsonCandidates = [...raw.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]);
+  const jsonCandidates = [...sanitized.matchAll(/\{[^{}]*\}/g)].map((m) => m[0]);
   let parsed = null;
   for (const candidate of jsonCandidates) {
     try { parsed = JSON.parse(candidate); } catch { /* skip */ }
   }
   if (!parsed) {
-    const greedyMatch = raw.match(/\{[\s\S]*\}/);
+    const greedyMatch = sanitized.match(/\{[\s\S]*\}/);
     try { parsed = JSON.parse(greedyMatch?.[0] || "{}"); } catch {
-      return { intent: "answer", text: raw.replace(/\{[\s\S]*\}/g, "").trim() || raw.trim() };
+      // JSON parse completely failed — return safe fallback, never expose raw AI output
+      console.error("[ai] JSON parse failed, raw:", raw.slice(0, 200));
+      return { intent: "answer", text: buildFallbackMessage(lang) };
     }
   }
   const replyText = String(parsed.reply || "").trim();
