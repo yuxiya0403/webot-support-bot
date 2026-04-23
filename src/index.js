@@ -5,7 +5,7 @@ import axios from "axios";
 import AnthropicBedrock from "@anthropic-ai/bedrock-sdk";
 import OpenAI from "openai";
 import { TOOL_DEFINITIONS, executeToolCall } from "./tools.js";
-import { scoreDocsBySimilarity } from "./embeddings.js";
+import { scoreDocsBySimilarity, scoreFaqsBySimilarity, scoreDocsWithScores } from "./embeddings.js";
 import { startFaqUpdateScheduler, listPendingSuggestions, approveSuggestions, confirmSuggestions, cancelSuggestions, editSuggestion, rejectSuggestions, listAwaitingConfirm } from "./faq-updater.js";
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
@@ -60,7 +60,11 @@ const env = {
     "这个问题我先记录，稍后由人工客服跟进。请留下你的联系方式或更具体的问题描述。",
   fallbackText:
     process.env.FALLBACK_TEXT ||
-    "我暂时没有足够信息回答这个问题。你可以换个问法，或者我可以帮你转人工。"
+    "我暂时没有足够信息回答这个问题。你可以换个问法，或者我可以帮你转人工。",
+  scopeGateEnabled: (process.env.SCOPE_GATE_ENABLED || "true").trim().toLowerCase() !== "false",
+  scopeFaqMinScore: Number(process.env.SCOPE_FAQ_MIN_SCORE || 0.35),
+  scopeDocMinScore: Number(process.env.SCOPE_DOC_MIN_SCORE || 0.30),
+  offTopicText: process.env.OFF_TOPIC_TEXT || ""
 };
 
 const requiredVars = [
@@ -1726,6 +1730,70 @@ function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+// ---------------------------------------------------------------------------
+// Scope gate — prevent answering off-topic questions
+// ---------------------------------------------------------------------------
+
+const OFF_TOPIC_PATTERNS = [
+  /\b(weather|forecast|rain|sunny|temperature|climate)\b/i,
+  /\b(news|politics|election|president|government|war|military)\b/i,
+  /\b(recipe|cooking|food|restaurant|menu)\b/i,
+  /\b(movie|film|music|song|artist|celebrity|netflix|youtube)\b/i,
+  /\b(sport|football|basketball|soccer|nba|nfl|fifa)\b/i,
+  /\b(joke|funny|meme|comic|entertainment)\b/i,
+  /\b(health|medicine|doctor|hospital|symptom|disease|covid)\b/i,
+  /\b(travel|hotel|flight|booking\.com|airbnb|visa)\b/i,
+  /\b(school|university|homework|assignment|study|exam)\b/i,
+  /^(hi|hello|hey|yo|sup|good morning|good evening|gm|gn)\b[^?]*$/i,
+  /^(thanks|thank you|thx|ty|ok|okay|sure|nice|cool|great|awesome)\b[^?]*$/i,
+  /^(lol|haha|😂|🤣|👍|❤️|🔥)[^?]*$/i,
+];
+
+const WEBOT_POSITIVE_PATTERNS = [
+  /\b(webot|pionex|trading bot|grid bot|dca bot|infinity grid|leveraged token)\b/i,
+  /\b(deposit|withdraw|withdrawal|transfer|fund|wallet|balance)\b/i,
+  /\b(kyc|verify|verification|identity|account|login|sign up|register)\b/i,
+  /\b(fee|commission|rate|price|cost|charge)\b/i,
+  /\b(listed|listing|trading pair|spot|futures|leverage)\b/i,
+  /\b(api|referral|affiliate|invite|bonus|reward|voucher|coupon)\b/i,
+  /\b(support|help|issue|problem|error|bug|can't|cannot|failed|stuck)\b/i,
+];
+
+function classifyScope(text) {
+  const lower = text.toLowerCase();
+  for (const re of WEBOT_POSITIVE_PATTERNS) {
+    if (re.test(text)) return "webot";
+  }
+  for (const re of OFF_TOPIC_PATTERNS) {
+    if (re.test(text)) return "off_topic";
+  }
+  return "unknown";
+}
+
+async function gateByEvidence(userText, knowledgeBase) {
+  try {
+    const [faqScores, docScores] = await Promise.all([
+      scoreFaqsBySimilarity(userText, knowledgeBase.faqs || [], 3),
+      scoreDocsWithScores(userText, await loadAllDocs(), 3)
+    ]);
+    const topFaqScore = faqScores[0]?.score || 0;
+    const topDocScore = docScores[0]?.score || 0;
+    if (topFaqScore >= env.scopeFaqMinScore || topDocScore >= env.scopeDocMinScore) {
+      return { pass: true, topFaqScore, topDocScore };
+    }
+    return { pass: false, topFaqScore, topDocScore };
+  } catch (err) {
+    console.error("[scope] evidence gate error, defaulting to pass:", err.message);
+    return { pass: true, topFaqScore: 0, topDocScore: 0 };
+  }
+}
+
+function buildOffTopicMessage(lang) {
+  if (env.offTopicText) return env.offTopicText;
+  if (lang === "zh") return "您好，我是Webot客服助手，只能回答与Webot平台相关的问题。如有其他需要，欢迎联系人工客服。";
+  return "Hi, I'm the Webot support assistant and can only help with Webot-related questions. For anything else, please reach out to our human support team.";
+}
+
 async function buildAiReply(message, inGroup = false, isMentioned = false) {
   const userText = message.text.trim();
   const chatId = message.chat.id;
@@ -1765,8 +1833,37 @@ async function buildAiReply(message, inGroup = false, isMentioned = false) {
     };
   }
 
+  // L1 scope gate: regex fast-path classification
+  if (env.scopeGateEnabled) {
+    const scope = classifyScope(userText);
+    if (scope === "off_topic") {
+      console.log(`[scope] L1 off-topic: "${userText.slice(0, 80)}"`);
+      if (inGroup && !isMentioned) return { intent: "ignore", text: "" };
+      return { intent: "ignore", text: "" };
+    }
+    // L2 scope gate: embedding evidence check for unknown messages
+    if (scope === "unknown") {
+      const evidence = await gateByEvidence(userText, knowledgeBase);
+      console.log(`[scope] L2 evidence: faq=${evidence.topFaqScore.toFixed(3)} doc=${evidence.topDocScore.toFixed(3)} pass=${evidence.pass}`);
+      if (!evidence.pass) {
+        if (inGroup && !isMentioned) return { intent: "ignore", text: "" };
+        // When mentioned or DM, be transparent that we can't help
+        return { intent: "ignore", text: "" };
+      }
+    }
+  }
+
+  const preFetchedDocuments = await findRelevantDocuments(userText);
   const matchedFaq = findBestFaqMatch(userText, knowledgeBase.faqs || []);
-  const aiReply = await generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup });
+  const aiReply = await generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup, preFetchedDocuments });
+
+  // L4 post-LLM scope override: if AI signals low confidence and no evidence used, silence in groups
+  if (env.scopeGateEnabled && aiReply.intent === "answer" && inGroup && !isMentioned) {
+    if (aiReply.scopeConfidence === "low" && !aiReply.evidenceUsed) {
+      console.log(`[scope] L4 override: low confidence + no evidence, silencing in group`);
+      return { intent: "ignore", text: "" };
+    }
+  }
 
   if (["handoff", "fallback"].includes(aiReply.intent)) {
     if (inGroup) {
@@ -2055,11 +2152,15 @@ function parseAiJsonResponse(raw, _matchedFaq, matchedDocuments, lang) {
   const docImageUrls = (intent === "answer" && showImages) ? (matchedDocuments[0]?.imageUrls || []) : [];
   // Trust the AI's faq_id over the keyword-based matchedFaq
   const aiFaqId = showImages ? (parsed.faq_id || null) : null;
+  const scopeConfidence = parsed.scope_confidence || "high";
+  const evidenceUsed = parsed.evidence_used !== false;
   return {
     intent,
     faqId: aiFaqId,
     imageUrls: docImageUrls,
-    text: replyText
+    text: replyText,
+    scopeConfidence,
+    evidenceUsed
   };
 }
 
@@ -2081,8 +2182,8 @@ function isCoinQuery(text) {
   return false;
 }
 
-async function generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup = false }) {
-  const matchedDocuments = await findRelevantDocuments(userText);
+async function generateAiResponse({ userText, historyKey, knowledgeBase, matchedFaq, lang, inGroup = false, preFetchedDocuments = null }) {
+  const matchedDocuments = preFetchedDocuments || await findRelevantDocuments(userText);
   const coinQuery = isCoinQuery(userText);
 
   // For coin listing/availability queries skip FAQ context entirely — forces AI to call the tool

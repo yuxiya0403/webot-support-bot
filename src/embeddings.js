@@ -51,7 +51,7 @@ function hashText(text) {
 }
 
 // ---------------------------------------------------------------------------
-// Bedrock embedding
+// Embedding
 // ---------------------------------------------------------------------------
 
 async function embed(text) {
@@ -89,8 +89,8 @@ function cosine(a, b) {
 // Public API — FAQs
 // ---------------------------------------------------------------------------
 
-export async function findTopFaqs(userText, faqs, topK = 10) {
-  if (!faqs.length) return faqs;
+export async function scoreFaqsBySimilarity(userText, faqs, topK = 10) {
+  if (!faqs.length) return [];
 
   try {
     const queryVec = await embed(userText);
@@ -102,21 +102,23 @@ export async function findTopFaqs(userText, faqs, topK = 10) {
       })
     );
     await saveCache();
-    return scored
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .map((s) => s.faq);
+    return scored.sort((a, b) => b.score - a.score).slice(0, topK);
   } catch (err) {
     console.error("[embeddings] dense FAQ search failed, falling back to TF-IDF:", err.message);
-    return findTopFaqsTfIdf(userText, faqs, topK);
+    return findTopFaqsTfIdfScored(userText, faqs, topK);
   }
+}
+
+export async function findTopFaqs(userText, faqs, topK = 10) {
+  const scored = await scoreFaqsBySimilarity(userText, faqs, topK);
+  return scored.map((s) => s.faq);
 }
 
 // ---------------------------------------------------------------------------
 // Public API — Documents
 // ---------------------------------------------------------------------------
 
-export async function scoreDocsBySimilarity(userText, docs, topK = 5) {
+export async function scoreDocsWithScores(userText, docs, topK = 12) {
   if (!docs.length) return [];
 
   try {
@@ -128,15 +130,19 @@ export async function scoreDocsBySimilarity(userText, docs, topK = 5) {
       })
     );
     await saveCache();
-    return scored
-      .filter((s) => s.score > 0.15)
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .map((s) => s.doc);
+    return scored.sort((a, b) => b.score - a.score).slice(0, topK);
   } catch (err) {
     console.error("[embeddings] dense doc search failed, falling back to TF-IDF:", err.message);
-    return scoreDocsTfIdf(userText, docs, topK);
+    return scoreDocsTfIdfScored(userText, docs, topK);
   }
+}
+
+export async function scoreDocsBySimilarity(userText, docs, topK = 5) {
+  const scored = await scoreDocsWithScores(userText, docs, topK * 2);
+  return scored
+    .filter((s) => s.score > 0.15)
+    .slice(0, topK)
+    .map((s) => s.doc);
 }
 
 // ---------------------------------------------------------------------------
@@ -195,7 +201,7 @@ function cosineTfidf(a, b) {
   return na && nb ? dot / (Math.sqrt(na) * Math.sqrt(nb)) : 0;
 }
 
-function findTopFaqsTfIdf(userText, faqs, topK) {
+function findTopFaqsTfIdfScored(userText, faqs, topK) {
   const corpus = faqs.map((faq) =>
     tokenize(`${faq.question} ${(faq.keywords || []).join(" ")} ${faq.answer.slice(0, 300)}`)
   );
@@ -205,19 +211,16 @@ function findTopFaqsTfIdf(userText, faqs, topK) {
   return faqs
     .map((faq, i) => ({ faq, score: cosineTfidf(queryVec, tfidfVector(corpus[i], idf)) }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, topK)
-    .map((s) => s.faq);
+    .slice(0, topK);
 }
 
-function scoreDocsTfIdf(userText, docs, topK) {
+function scoreDocsTfIdfScored(userText, docs, topK) {
   const corpus = docs.map((d) => tokenize(d.text.slice(0, 5000)));
   const queryTokens = tokenize(userText);
   const idf = buildIdf([...corpus, queryTokens]);
   const queryVec = tfidfVector(queryTokens, idf);
   return docs
     .map((doc, i) => ({ doc, score: cosineTfidf(queryVec, tfidfVector(corpus[i], idf)) }))
-    .filter((s) => s.score > 0)
     .sort((a, b) => b.score - a.score)
-    .slice(0, topK)
-    .map((s) => s.doc);
+    .slice(0, topK);
 }
