@@ -64,7 +64,10 @@ const env = {
   scopeGateEnabled: (process.env.SCOPE_GATE_ENABLED || "true").trim().toLowerCase() !== "false",
   scopeFaqMinScore: Number(process.env.SCOPE_FAQ_MIN_SCORE || 0.35),
   scopeDocMinScore: Number(process.env.SCOPE_DOC_MIN_SCORE || 0.30),
-  offTopicText: process.env.OFF_TOPIC_TEXT || ""
+  offTopicText: process.env.OFF_TOPIC_TEXT || "",
+  triageEnabled: (process.env.TRIAGE_ENABLED || "true").toLowerCase() !== "false",
+  triageModel: process.env.TRIAGE_MODEL || "gpt-4o-mini",
+  triageCacheTtlMs: Number(process.env.TRIAGE_CACHE_TTL_MS || 5 * 60 * 1000)
 };
 
 const requiredVars = [
@@ -83,7 +86,9 @@ const anthropicClient = new AnthropicBedrock({
   timeout: 60000 // 60s timeout
 });
 
-const openaiClient = env.aiProvider === "openai"
+// Initialised whenever an OPENAI_API_KEY is available — used by the answer
+// path (when AI_PROVIDER=openai) and by the group-triage classifier.
+const openaiClient = env.openaiApiKey
   ? new OpenAI({ apiKey: env.openaiApiKey, timeout: 60000 })
   : null;
 
@@ -1798,7 +1803,10 @@ async function buildAiReply(message, inGroup = false, isMentioned = false) {
   const userText = message.text.trim();
   const chatId = message.chat.id;
   const userName = buildTelegramDisplayName(message.from);
-  const lang = detectLanguage("", message.text || "");
+  // In groups the bot always replies in English, regardless of the user's
+  // message language. DMs follow the user's detected language.
+  const detectedLang = detectLanguage("", message.text || "");
+  const lang = inGroup ? "en" : detectedLang;
   const knowledgeBase = await loadKnowledgeBase();
   // In groups each user gets their own history so context doesn't bleed between users
   const historyKey = inGroup
@@ -1821,7 +1829,7 @@ async function buildAiReply(message, inGroup = false, isMentioned = false) {
   }
 
   // Pre-filter: ignore greetings/chit-chat before calling AI
-  if (isIgnorableMessage(userText, inGroup, message)) {
+  if (await isIgnorableMessage(userText, inGroup, message, isMentioned)) {
     return { intent: "ignore", text: "" };
   }
 
@@ -1870,7 +1878,6 @@ async function buildAiReply(message, inGroup = false, isMentioned = false) {
       await logGap({ userText, intent: aiReply.intent, hadPartialFaqMatch: !!matchedFaq });
       // In group: only handoff if bot was directly mentioned, otherwise stay silent
       if (!isMentioned) return { intent: "ignore", text: "" };
-      const lang = detectLanguage("", userText);
       await notifyAgents({ message, userText, intent: aiReply.handoffReason || aiReply.intent, skipIntercom: true });
       return { intent: "handoff", text: buildHandoffMessage(lang) };
     }
@@ -1957,21 +1964,28 @@ function buildWelcomeMessage(knowledgeBase, lang) {
 
 const GREETING_PATTERNS = /^(hi+|hey+|hello|helo|hola|yo|sup|howdy|greetings|good\s?(morning|afternoon|evening|night|day)|thanks?|thank\s?you|thx|ty|ok|okay|k|lol|haha|hehe|nice|cool|great|awesome|👍|🙏|😊|😀|😁|🤙|✌️|👋|🫡|😂|🤣)[!?.]*$/i;
 
-function isIgnorableMessage(text, inGroup, message) {
+async function isIgnorableMessage(text, inGroup, message, isMentioned = false) {
   if (!inGroup) return false;
+  // If the user @mentions us, always engage
+  if (isMentioned) return false;
   // If replying to the bot's own message, always process it — user is engaging with us
   if (message?.reply_to_message && !isReplyToOtherUser(message)) return false;
+  // Explicit human-handoff keywords bypass all other filters — even in groups
+  // without @mention. Missing a real handoff is worse than butting in.
+  if (shouldRequestHumanHandoff(text)) return false;
+
   const t = text.trim();
+  // Cheap regex pre-filter (no API call)
   if (t.length <= 3) return true;
   if (GREETING_PATTERNS.test(t)) return true;
-  // If the message @mentions someone else (not our bot), it's directed at another user — ignore
+  // @mentioning another user or replying to another user → user-to-user conversation
   if (mentionsOtherUser(message)) return true;
-  // If replying to another user's message (not the bot's), it's a conversation between users — ignore
   if (isReplyToOtherUser(message)) return true;
-  // Filter out casual chat / non-question messages in group
-  // Only keep messages that look like a question or contain Webot-related keywords
-  if (!looksLikeSupportQuestion(t)) return true;
-  return false;
+
+  // Passed the cheap filter. Ask the triage LLM (ENGAGE / SILENT).
+  // On error or when disabled, falls back to regex inside triageGroupMessage.
+  const decision = await triageGroupMessage(t);
+  return decision === "SILENT";
 }
 
 function mentionsOtherUser(message) {
@@ -2007,6 +2021,74 @@ function looksLikeQuestion(text) {
   if (/^(how|what|where|when|why|can|does|do|is|are|will|should|could|would)\b/i.test(text)) return true;
   if (/[\u4e00-\u9fff].*(吗|呢|嘛|么|怎|哪|谁|几|多少|为啥|啥)/.test(text)) return true;
   return false;
+}
+
+// Explicit problem/trouble vocabulary — narrower than SUPPORT_KEYWORDS, so a
+// user reporting an issue without phrasing it as a question ("我账号卡了")
+// still gets help, but bare keyword statements ("Webot fee 高啊") do not.
+function mentionsTrouble(text) {
+  return /\b(stuck|frozen|missing|pending|failed|failure|error|blocked|suspended|disappeared|can'?t|cannot|doesn'?t\s+work|not\s+working)\b/i.test(text)
+    || /(卡住|卡了|卡死|冻结|冻住|没到账|没收到|进不去|登不上|出错|失败|有问题|不能用|不能提|打不开|失效|丢了|没了)/.test(text);
+}
+
+// LLM-based triage for group messages. Asks a small fast model whether the
+// bot should engage with the message. Used only in groups for messages that
+// passed the cheap regex pre-filter and are not addressed to the bot.
+const TRIAGE_SYSTEM_PROMPT = `You triage Telegram group messages for the Webot crypto support bot. Webot (formerly Pionex.US) is a US crypto exchange with auto-trading bots (grid / DCA / martingale / TWAP).
+
+Decide if the bot should reply to this message.
+
+ENGAGE if the user is:
+- asking a question (explicit or implicit)
+- reporting a problem, describing an issue, or expressing confusion
+- stuck on something and needs help
+- requesting human support
+
+SILENT if the user is:
+- making a statement, opinion, or casual comment
+- chatting with other users
+- sharing news, price talk, or market opinions
+- off-topic (other exchanges, other coins, general crypto)
+- venting without asking for help
+- greeting, reacting, or sending short chit-chat
+
+Reply with exactly ONE word: ENGAGE or SILENT. No explanation.`;
+
+const triageCache = new Map(); // text → { decision, expiresAt }
+
+async function triageGroupMessage(userText) {
+  if (!env.triageEnabled) return "ENGAGE";
+  if (!openaiClient) {
+    return (looksLikeQuestion(userText) || mentionsTrouble(userText)) ? "ENGAGE" : "SILENT";
+  }
+
+  const key = userText.slice(0, 500);
+  const now = Date.now();
+  const cached = triageCache.get(key);
+  if (cached && cached.expiresAt > now) return cached.decision;
+
+  try {
+    const completion = await openaiClient.chat.completions.create({
+      model: env.triageModel,
+      messages: [
+        { role: "system", content: TRIAGE_SYSTEM_PROMPT },
+        { role: "user", content: userText }
+      ],
+      max_tokens: 30,
+      temperature: 0
+    });
+    const raw = (completion.choices?.[0]?.message?.content || "").trim().toUpperCase();
+    const decision = raw.startsWith("ENGAGE") ? "ENGAGE" : "SILENT";
+    triageCache.set(key, { decision, expiresAt: now + env.triageCacheTtlMs });
+    if (triageCache.size > 500) {
+      const firstKey = triageCache.keys().next().value;
+      triageCache.delete(firstKey);
+    }
+    return decision;
+  } catch (err) {
+    console.error("[triage] OpenAI call failed, falling back to regex:", err.message);
+    return (looksLikeQuestion(userText) || mentionsTrouble(userText)) ? "ENGAGE" : "SILENT";
+  }
 }
 
 function looksLikeSupportQuestion(text) {
