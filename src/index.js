@@ -1978,8 +1978,9 @@ async function isIgnorableMessage(text, inGroup, message, isMentioned = false) {
   // Cheap regex pre-filter (no API call)
   if (t.length <= 3) return true;
   if (GREETING_PATTERNS.test(t)) return true;
-  // @mentioning another user or replying to another user → user-to-user conversation
-  if (mentionsOtherUser(message)) return true;
+  // @mentioning another user → usually user-to-user, but if it also contains a
+  // genuine question (e.g. "@admin is reverse bot possible?") let triage decide.
+  if (mentionsOtherUser(message) && !looksLikeQuestion(t)) return true;
   if (isReplyToOtherUser(message)) return true;
 
   // Passed the cheap filter. Ask the triage LLM (ENGAGE / SILENT).
